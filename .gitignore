@@ -1,0 +1,45 @@
+# Machine-specific tools, signing keys and device configuration
+/.local/
+/dist/
+/node_modules/
+.DS_Store
+__pycache__/
+*.pyc
+.env
+.env.*
+*.p12
+*.pfx
+*.pkcs12
+*.jks
+*.keystore
+*.local.json
+*.pem
+*.key
+*.csr
+profiles.xml
+session.json
+certificate-password.txt
+/signing.json
+/device.json
+/certificates/
+
+# Native helper builds can contain local paths and must stay private.
+/scripts/native-home/bin/
+/scripts/native-home/obj/
+*.dll
+*.pdb
+*.exe
+
+# Proprietary fonts are injected from .local/ at preview/package time.
+/app/assets/private-fonts/
+/app/.buildResult/
+PP*.ttf
+PP*.otf
+PP*.woff
+PP*.woff2
+*.wgt
+
+# Personal studies, research and draft writing stay local.
+/explorations/
+/docs/research/
+/docs/articles/
