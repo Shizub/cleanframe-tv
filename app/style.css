@@ -43,6 +43,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .warn .ico{width:30px;height:30px;margin-top:5px}
 .error-chip{padding:6px 14px;color:var(--warn);white-space:nowrap}
 .full-name{max-width:1000px}
+.weather{margin-top:2px}
 /* Base controls also serve wallpaper preview. Quiet Home utilities override them below. */
 .utils{position:absolute;right:112px;top:72px;display:flex;align-items:center}
 .u{height:64px;padding:0 26px 0 20px;border-radius:32px;display:inline-flex;align-items:center;font-size:30px;font-weight:500;letter-spacing:-.3px;white-space:nowrap;color:var(--mute);background:none;text-shadow:0 1px 2px rgba(0,0,0,.32);transition:background-color 140ms linear,color 140ms linear}
@@ -466,6 +467,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .bg-photo.has-adaptive-ink.l-dock .caption .clock{color:var(--tl-clock-ink)}
 .bg-photo.has-adaptive-ink.l-list.tr-dark .caption .clock{opacity:1;text-shadow:var(--tr-shadow)}
 .bg-photo.has-adaptive-ink.l-dock.adaptive-tl-dark .caption .clock{opacity:1;text-shadow:var(--tl-shadow)}
+.bg-photo.l-dock.has-dock-clock-ink .caption .weather{color:var(--dock-clock-ink);text-shadow:none}
+.bg-photo.has-adaptive-ink.l-list .caption .weather{color:var(--tr-clock-ink)}
+.bg-photo.has-adaptive-ink.l-dock .caption .weather{color:var(--tl-clock-ink);text-shadow:var(--tl-shadow)}
 .bg-photo.has-adaptive-ink.l-dock.adaptive-tl-dark.tr-dark .shade{display:none}
 .has-adaptive-ink .quiet-utils{--u-rest-ink:var(--tr-rest-ink);--u-peer-ink:var(--tr-peer-ink)}
 .has-adaptive-ink.l-list .quiet-utils{--u-rest-ink:var(--br-rest-ink);--u-peer-ink:var(--br-peer-ink)}

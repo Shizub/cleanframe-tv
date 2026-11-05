@@ -2,7 +2,7 @@
 
 ## Home
 
-- Dock: Left/Right scrolls the apps without wrapping. Up enters the top-right controls, starting with Art Mode or the last selected control. Left/Right moves between Art Mode, All apps and Settings. Down or Back returns to the selected app. The clock is at the top left.
+- Dock: Left/Right scrolls the apps without wrapping. Up enters the top-right controls, starting with Art Mode or the last selected control. Left/Right moves between Art Mode, Inputs, All apps, Samsung Home and Settings. Down or Back returns to the selected app. The clock is at the top left.
 - List: Up/Down scrolls the apps without wrapping. Right enters the bottom-right controls, aligned with the clock above. Up/Down moves between Art Mode, All apps and Settings. Left or Back returns to the selected app. The list fades at both ends as it scrolls.
 - OK opens the selected item. Focus alone never launches an app.
 - Icons-only apps and controls reveal their names when focused. App presentation and control presentation are independent.
@@ -33,7 +33,7 @@ The selected font applies to Home app names, the clock and Home controls, includ
 
 ## Streaming apps
 
-The nine default apps keep their known native IDs. Other installed consumer apps can also be added to Home. Launching uses the public `tizen.application.launch` API with the app's native ID. Missing apps and denied launches produce a real error. No web player, placeholder success page or account credential is embedded.
+The six default apps keep their known native IDs. Other installed consumer apps can also be added to Home. Launching uses the public `tizen.application.launch` API with the app's native ID. Missing apps and denied launches produce a real error. No web player, placeholder success page or account credential is embedded.
 
 ## All apps
 
@@ -66,7 +66,7 @@ Installed-app discovery allows up to 20 seconds for large TV catalogues; launch 
 
 ## HDMI inputs
 
-Settings → Samsung → Inputs opens the HDMI chooser. The adapter reads the TV’s actual connected and disconnected source records, including sleeping devices that may be listed as disconnected. It does not guess a universal port count or add a fourth default Home control. Missing APIs, denied access and discovery failure produce an unavailable/error state rather than invented ports. The active source comes from the synchronous `tvwindow.getSource()` return value.
+The Inputs control on Home, or Settings → Samsung → Inputs, opens the HDMI chooser. The adapter reads the TV’s actual connected and disconnected source records, including sleeping devices that may be listed as disconnected. It does not guess a universal port count. Missing APIs, denied access and discovery failure produce an unavailable/error state rather than invented ports. The active source comes from the synchronous `tvwindow.getSource()` return value.
 
 Up/Down selects an input. OK requests that exact source; Back returns to Samsung Settings. Retry after a failed load rereads the available sources. A routing error remains an error, and a failed handoff leaves the launcher usable. Timed-out or cancelled requests cannot start a later routing or viewer action; a native request already sent to the TV may itself be uncancellable.
 
@@ -91,7 +91,9 @@ The native Home operation and startup configuration from 19 October remain separ
 
 ## Clock and rendering
 
-Both layouts show the TV's local time in 12-hour format, without AM/PM or seconds. It updates at the minute boundary and on return to the launcher. No date or clock panel is shown.
+Both layouts show the TV's local time in 24-hour format, without seconds. It updates at the minute boundary and on return to the launcher. No date or clock panel is shown.
+
+Weather appears under the clock. `updateWeather` asks Open-Meteo for the configured `WEATHER_PLACE` every 30 minutes while the launcher is visible, and retries after 5 minutes on failure. It sends coordinates only and needs no key. A failure keeps the last reading, or shows nothing before the first one.
 
 Photographic materials and blurred panel backgrounds are generated before packaging and stay aligned with the full-screen image. Photo colour and contrast metadata are also prepared offline. Navigation does not sample image pixels, run an optics engine or apply live backdrop blur. Flat backgrounds use matching light or dark panel colours. Focus feedback uses transforms and opacity; reduced motion removes animated scaling and movement while retaining opacity feedback.
 

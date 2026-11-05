@@ -2,7 +2,7 @@
 window.CleanFrameWallpapers = [
   {
     "id": "misty",
-    "name": "Misty coast",
+    "name": "Côte brumeuse",
     "src": "assets/wallpapers/misty.jpg",
     "thumb": "assets/wallpapers/misty-thumb.jpg",
     "tone": "light",
@@ -17,7 +17,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "cove",
-    "name": "Quiet cove",
+    "name": "Crique paisible",
     "src": "assets/wallpapers/cove.jpg",
     "thumb": "assets/wallpapers/cove-thumb.jpg",
     "tone": "light",
@@ -32,7 +32,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "forest",
-    "name": "Forest mist",
+    "name": "Forêt dans la brume",
     "src": "assets/wallpapers/forest.jpg",
     "thumb": "assets/wallpapers/forest-thumb.jpg",
     "tone": "dark",
@@ -47,7 +47,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "valley",
-    "name": "Mountain valley",
+    "name": "Vallée de montagne",
     "src": "assets/wallpapers/valley.jpg",
     "thumb": "assets/wallpapers/valley-thumb.jpg",
     "tone": "dark",
@@ -62,7 +62,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "night",
-    "name": "Desert stars",
+    "name": "Désert étoilé",
     "src": "assets/wallpapers/night.jpg",
     "thumb": "assets/wallpapers/night-thumb.jpg",
     "tone": "light",
@@ -77,7 +77,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "peaks",
-    "name": "Blue peaks",
+    "name": "Sommets bleus",
     "src": "assets/wallpapers/peaks.jpg",
     "thumb": "assets/wallpapers/peaks-thumb.jpg",
     "tone": "dark",
@@ -94,7 +94,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "bridge",
-    "name": "Bridge at dusk",
+    "name": "Pont au crépuscule",
     "src": "assets/wallpapers/bridge.jpg",
     "thumb": "assets/wallpapers/bridge-thumb.jpg",
     "tone": "dark",
@@ -109,7 +109,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "ridge",
-    "name": "Sunlit ridges",
+    "name": "Crêtes ensoleillées",
     "src": "assets/wallpapers/ridge.jpg",
     "thumb": "assets/wallpapers/ridge-thumb.jpg",
     "tone": "dark",
@@ -124,7 +124,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "golden",
-    "name": "Golden hour",
+    "name": "Heure dorée",
     "src": "assets/wallpapers/golden.jpg",
     "thumb": "assets/wallpapers/golden-thumb.jpg",
     "tone": "dark",
@@ -139,7 +139,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "summit",
-    "name": "Sunlit summits",
+    "name": "Cimes ensoleillées",
     "src": "assets/wallpapers/summit.jpg",
     "thumb": "assets/wallpapers/summit-thumb.jpg",
     "tone": "dark",
@@ -154,7 +154,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "goldcoast",
-    "name": "Gold Coast dusk",
+    "name": "Crépuscule à Gold Coast",
     "src": "assets/wallpapers/goldcoast.jpg",
     "thumb": "assets/wallpapers/goldcoast-thumb.jpg",
     "tone": "light",
@@ -169,7 +169,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "sydney",
-    "name": "Sydney Harbour",
+    "name": "Port de Sydney",
     "src": "assets/wallpapers/sydney.jpg",
     "thumb": "assets/wallpapers/sydney-thumb.jpg",
     "tone": "light",
@@ -184,7 +184,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "amber",
-    "name": "Amber hills",
+    "name": "Collines ambrées",
     "src": "assets/wallpapers/amber.jpg",
     "thumb": "assets/wallpapers/amber-thumb.jpg",
     "tone": "light",
@@ -199,7 +199,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "mint",
-    "name": "Mint wave",
+    "name": "Vague menthe",
     "src": "assets/wallpapers/mint.jpg",
     "thumb": "assets/wallpapers/mint-thumb.jpg",
     "tone": "light",
@@ -214,7 +214,7 @@ window.CleanFrameWallpapers = [
   },
   {
     "id": "alpine",
-    "name": "Alpine glow",
+    "name": "Lueur alpine",
     "src": "assets/wallpapers/alpine.jpg",
     "thumb": "assets/wallpapers/alpine-thumb.jpg",
     "tone": "light",

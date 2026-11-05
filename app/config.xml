@@ -5,8 +5,10 @@
   <content src="index.html"/>
   <name>CleanFrame</name>
   <icon src="icon.png"/>
+  <access origin="https://api.open-meteo.com" subdomains="false"/>
   <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
   <tizen:profile name="tv-samsung"/>
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
   <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
   <tizen:privilege name="http://tizen.org/privilege/application.info"/>
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
