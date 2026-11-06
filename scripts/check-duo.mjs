@@ -19,11 +19,13 @@ function check(name, ok, detail) {
 
 /* Runs in the page, before the app. The same public API shape as the real adapter expects. */
 function installTv(seed) {
-  if (seed && seed.value && !localStorage.getItem(seed.key)) localStorage.setItem(seed.key, JSON.stringify(seed.value));
-  const tv = window.__tv = { launched: [], controls: [], sources: [], refuse: false, noSources: false };
-  const catalogue = [['org.tizen.netflix-app', 'Netflix'], ['9Ur5IzDKqV.TizenYouTube', 'YouTube'], ['org.tizen.primevideo', 'Prime Video'], ['MCmYXNxgcu.DisneyPlus', 'Disney+'],
+  if (seed.value && !localStorage.getItem(seed.key)) localStorage.setItem(seed.key, JSON.stringify(seed.value));
+  if (seed.hidden) { window.__hidden = true; Object.defineProperty(document, 'hidden', { configurable: true, get: () => window.__hidden }); }
+  const tv = window.__tv = { launched: [], controls: [], sources: [], reads: 0, refuse: false, refuseSource: false, noSources: false, noApps: false };
+  tv.catalogue = [['org.tizen.netflix-app', 'Netflix'], ['9Ur5IzDKqV.TizenYouTube', 'YouTube'], ['org.tizen.primevideo', 'Prime Video'], ['MCmYXNxgcu.DisneyPlus', 'Disney+'],
     ['com.samsung.tv.aria-video', 'Apple TV'], ['rJeHak5zRg.Spotify', 'Spotify'], ['Qa12345678.StreamA', 'Stream A'], ['Qa12345678.StreamB', 'Stream B'], ['Qa12345678.StreamC', 'Stream C']]
-    .concat(Array.from({ length: seed && seed.more || 0 }, (_, i) => ['Qa12345678.Extra' + (i + 10), 'Extra ' + (i + 10)]))
+    .concat(Array.from({ length: seed.more || 0 }, (_, i) => ['Qa12345678.Extra' + (i + 10), 'Extra ' + (i + 10)]))
+    .filter(([id]) => !(seed.missing || []).includes(id))
     .map(([id, name]) => ({ id, name, show: true, iconPath: '' }));
   const hdmi = [1, 2, 3].map(number => ({ type: 'HDMI', number }));
   window.tizen = {
@@ -31,25 +33,25 @@ function installTv(seed) {
     ApplicationControl: function (operation, uri, mime, category, data) { this.operation = operation; this.data = data; },
     application: {
       getCurrentApplication: () => ({ appInfo: { id: 'nClrkHome1.FrameHome' } }),
-      getAppsInfo(ok) { setTimeout(() => ok(catalogue), 0); },
+      getAppsInfo(ok, fail) { tv.reads++; setTimeout(() => (tv.noApps ? fail({ message: 'Applis illisibles.' }) : ok(tv.catalogue)), 0); },
       launch(id, ok, fail) { tv.launched.push(id); setTimeout(() => (tv.refuse ? fail({ message: 'La télé a refusé.' }) : ok()), 0); },
       launchAppControl(control, id, ok) { tv.controls.push({ id, data: control.data.map(item => item.key + '=' + item.value) }); setTimeout(ok, 0); }
     },
     systeminfo: { getPropertyValue(name, ok, fail) { setTimeout(() => (tv.noSources ? fail({ message: 'Entrées illisibles.' }) : ok({ connected: hdmi.slice(0, 2), disconnected: hdmi.slice(2) })), 0); } },
-    tvwindow: { getSource: () => hdmi[0], setSource(source, ok) { tv.sources.push(source.number); setTimeout(() => ok(source), 0); } }
+    tvwindow: { getSource: () => hdmi[0], setSource(source, ok, fail) { tv.sources.push(source.number); setTimeout(() => (tv.refuseSource ? fail({ message: 'Entrée refusée.' }) : ok(source)), 0); } }
   };
 }
 
 const preview = await openPreview({ duo: true });
-async function open({ home, look, time, clock, more } = {}) {
+async function open({ home, look, time, clock, more, missing, hidden, devices } = {}) {
   const context = await preview.browser.newContext({ viewport: { width: 1920, height: 1080 }, timezoneId: 'Europe/Paris' });
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   page.on('pageerror', error => check('no page error', false, error.message));
   page.on('response', response => { if (response.status() >= 400) check('no failed request', false, response.status() + ' ' + response.url()); });
   await page.route('https://api.open-meteo.com/**', route => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ current: { temperature_2m: 12.4, weather_code: 3 } }) }));
-  const value = home || look ? { dock: home || DEFAULTS, look: { layout: 'duo', ...look } } : null;
-  await page.addInitScript(installTv, value || more ? { key: KEY, value, more } : null);
+  const value = home || look || devices ? { dock: home || DEFAULTS, look: { layout: 'duo', ...look }, devices } : null;
+  await page.addInitScript(installTv, { key: KEY, value, more, missing, hidden });
   if (clock) await page.clock.install();
   if (time) await page.clock.setFixedTime(new Date(time));
   await page.goto(preview.baseURL + '/home/');
@@ -82,6 +84,13 @@ const card = page => page.evaluate(() => {
 });
 const value = (page, selector, key) => page.evaluate(([s, k]) => window.Motion.valueOf(document.querySelector(s))[k], [selector, key]);
 const toast = page => page.evaluate(() => document.getElementById('duoToast').textContent);
+const saved = page => page.evaluate(k => JSON.parse(localStorage.getItem(k)), KEY);
+const loaded = page => page.waitForFunction(() => ShoreQA.state().catalog.loaded && !ShoreQA.state().catalog.loading);
+/* What the launcher sees when it comes back on screen after another app. */
+const comeBack = async page => { await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await loaded(page); await settled(page); };
+const uninstall = (page, ...ids) => page.evaluate(list => { window.__tv.catalogue = window.__tv.catalogue.filter(a => !list.includes(a.id)); }, ids);
+const lines = (page, where) => page.evaluate(column => Array.prototype.filter.call(document.querySelectorAll('.duo-eline.is-' + column), () => true).sort((a, b) => window.Motion.valueOf(a).y - window.Motion.valueOf(b).y).map(el => el.querySelector('.duo-eline-name').textContent), where);
+const logos = page => page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('.duo-card:not(.is-leaving) .duo-line img'), img => [img.getAttribute('src').split('/').pop(), img.naturalWidth > 0]));
 
 try {
   section = 'First run';
@@ -384,7 +393,7 @@ try {
     const page = await open();
     await openFromHome(page, 'util.inputs'); await rested(page);
     let c = await card(page);
-    check('the list lands on the active input', (await where(page)).focusAction === 'input.1' && c.rows.join() === 'HDMI 1,HDMI 2,HDMI 3' && c.checked.join() === 'HDMI 1', [await where(page), c]);
+    check('the list lands on the active input', (await where(page)).focusAction === 'input.1' && c.rows.join() === 'HDMI 1,HDMI 2,HDMI 3,Choisir les appareils' && c.checked.join() === 'HDMI 1', [await where(page), c]);
     check('it says which are asleep', await page.evaluate(() => document.querySelectorAll('.duo-line')[2].className.includes('is-dim') && document.querySelectorAll('.duo-line')[2].querySelector('.duo-line-value').textContent.includes('veille')));
     await nav(page, 'back'); await settled(page);
     await page.evaluate(() => { window.__tv.noSources = true; });
@@ -393,7 +402,7 @@ try {
     check('a refusal offers to try again', c.rows.join() === 'Réessayer' && (await where(page)).focusAction === 'inputs.retry' && c.sub.length > 0, [c, await where(page)]);
     await page.evaluate(() => { window.__tv.noSources = false; });
     await nav(page, 'ok'); await rested(page);
-    check('trying again finds the list', (await card(page)).rows.length === 3 && (await where(page)).focusAction === 'input.1', await card(page));
+    check('trying again finds the list', (await card(page)).rows.length === 4 && (await where(page)).focusAction === 'input.1', await card(page));
     await page.context().close();
   }
 
@@ -406,7 +415,7 @@ try {
     check('the first opening lands on the grid', w.zone === 'grid' && w.focusAction === 'apps.open.' + (await state(page)).catalog.ids[0] && w.focusCount === 1, w);
     check('the card has the size of the grid', c.box.w === 1560 && c.box.h === 900, c.box);
     const grid = await page.evaluate(() => ({ cells: document.querySelectorAll('.duo-cell').length, badges: document.querySelectorAll('.duo-cell-badge').length, broken: Array.prototype.filter.call(document.querySelectorAll('.duo-cell img'), img => !img.naturalWidth).length, tiles: document.querySelectorAll('.duo-cell .duo-tile').length }));
-    check('every app has its cell', grid.cells === 21, grid);
+    check('every app and source has its cell', grid.cells === 24, grid);
     check('a badge marks those on Home', grid.badges === 6, grid);
     check('known apps have their icon, others their initials', grid.broken === 0 && grid.tiles === 15, grid);
     const lens = () => page.evaluate(() => { const r = document.querySelector('.duo-grid-lens').getBoundingClientRect(), f = document.querySelector('.duo-cell.is-focus .duo-cell-tile').getBoundingClientRect(); return Math.abs(r.left + r.right - f.left - f.right) <= 2 && Math.abs(r.top + r.bottom - f.top - f.bottom) <= 2; });
@@ -421,7 +430,7 @@ try {
     check('the selection stays in the window', inside);
     for (let i = 0; i < 5; i++) await nav(page, 'down');
     await rested(page);
-    check('Down stops on the last app', (await where(page)).focusAction === 'apps.open.' + (await state(page)).catalog.ids[20] && await lens(), await where(page));
+    check('Down stops on the last row', (await where(page)).focusAction === 'apps.open.hdmi2' && await lens(), await where(page));
     for (let i = 0; i < 6; i++) await nav(page, 'up');
     await rested(page);
     check('Up from the first row reaches the top button', (await where(page)).focusAction === 'apps.editor' && (await where(page)).focusCount === 1 && await value(page, '.duo-grid-lens', 'o') === 0, await where(page));
@@ -438,7 +447,7 @@ try {
   {
     const page = await open();
     const y = id => page.evaluate(line => { const list = Array.prototype.filter.call(document.querySelectorAll('.duo-eline'), el => el.querySelector('.duo-eline-name').textContent === line); return window.Motion.valueOf(list[0]).y; }, id);
-    const saved = () => page.evaluate(k => JSON.parse(localStorage.getItem(k)).dock, KEY);
+    const dock = () => saved(page).then(c => c.dock);
     await openFromHome(page, 'util.settings');
     await nav(page, 'down', 'down', 'ok');
     await page.waitForFunction(() => ShoreQA.state().catalog.loaded); await rested(page);
@@ -447,22 +456,22 @@ try {
     for (let i = 0; i < 5; i++) await nav(page, 'up');
     check('Up walks to the first app', (await where(page)).focusAction === 'editor.move.netflix', await where(page));
     const others = await page.evaluate(() => Array.prototype.filter.call(document.querySelectorAll('.duo-eline.is-other'), () => true).length);
-    check('the other apps are in their column', others === 3, others);
+    check('the sources and the other apps are in their column', others === 6, others);
     check('the lines keep an even rhythm', await y('YouTube') - await y('Netflix') === 76 && await y('Prime Video') - await y('YouTube') === 76);
 
     await nav(page, 'ok', 'down', 'down');
     check('OK picks an app up and the keys carry it', (await state(page)).draft && (await state(page)).draft.order.indexOf('netflix') === 2, (await state(page)).draft);
     check('the hint says how', /OK pose/.test(await toast(page)), await toast(page));
-    check('nothing is saved while carrying', (await saved())[0] === 'netflix', await saved());
+    check('nothing is saved while carrying', (await dock())[0] === 'netflix', await dock());
     await nav(page, 'back'); await rested(page);
     check('Back puts it back', (await state(page)).draft === null && (await state(page)).home[0] === 'netflix' && (await where(page)).view === 'editor' && await y('Netflix') === 12, [await y('Netflix'), await where(page)]);
     await nav(page, 'ok', 'down', 'ok'); await rested(page);
-    check('OK places it and saves', (await saved()).slice(0, 2).join() === 'youtube,netflix' && await y('YouTube') === 12 && await y('Netflix') === 88, await saved());
+    check('OK places it and saves', (await dock()).slice(0, 2).join() === 'youtube,netflix' && await y('YouTube') === 12 && await y('Netflix') === 88, await dock());
     check('the toast confirms it', await toast(page) === 'Ordre enregistré', await toast(page));
     await nav(page, 'right');
     check('Right reaches the remove button', (await where(page)).focusAction === 'editor.remove.netflix' && (await where(page)).focusCount === 1, await where(page));
     await nav(page, 'ok'); await rested(page);
-    check('OK removes the app', !(await state(page)).home.includes('netflix') && (await saved()).length === 5, await saved());
+    check('OK removes the app', !(await state(page)).home.includes('netflix') && (await dock()).length === 5, await dock());
     check('the selection follows it to the other column', (await where(page)).focusAction === 'editor.add.netflix', await where(page));
     check('the count follows', await page.evaluate(() => document.querySelector('.duo-count').textContent) === '5');
     await nav(page, 'ok'); await rested(page);
@@ -504,6 +513,195 @@ try {
     await nav(page, 'left');
     const home = await page.evaluate(() => window.Motion.valueOf(document.querySelector('.duo-edot')).o);
     check('Left comes back to a remove button on screen', (await where(page)).focusAction.startsWith('editor.remove.') && home === 1, await where(page));
+    await page.context().close();
+  }
+
+  section = 'HDMI sources';
+  {
+    const page = await open();
+    await page.waitForFunction(() => ShoreQA.state().catalog.inputs.length === 3);
+    await openFromHome(page, 'util.apps'); await rested(page);
+    const cells = await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('.duo-cell'), el => { const img = el.querySelector('img'); return [el.querySelector('.duo-cell-name').textContent, img ? img.getAttribute('src').split('/').pop() : '', !!img && img.naturalWidth > 0]; }));
+    check('All apps lists the sources after the apps', cells.slice(-3).map(c => c[0]).join() === 'HDMI 1,HDMI 2,HDMI 3' && !cells.slice(0, -3).some(c => /HDMI/.test(c[0])), cells);
+    check('a source without a device shows the HDMI logo', cells.slice(-3).every(c => c[1] === 'hdmi.webp' && c[2]), cells.slice(-3));
+    await page.evaluate(() => ShoreQA.activate('apps.open.hdmi3')); await settled(page);
+    let routed = await tv(page);
+    check('OK in All apps switches to the source', routed.sources.at(-1) === 3 && routed.launched.at(-1) === 'org.tizen.tv-viewer', routed.sources);
+    await page.evaluate(() => ShoreQA.activate('apps.editor')); await rested(page);
+    check('the sources come first in the editor', (await lines(page, 'other')).slice(0, 3).join() === 'HDMI 1,HDMI 2,HDMI 3', await lines(page, 'other'));
+    await page.evaluate(() => ShoreQA.activate('editor.add.hdmi2')); await rested(page);
+    check('a source joins Home like an app', (await state(page)).home.at(-1) === 'hdmi2' && (await saved(page)).dock.at(-1) === 'hdmi2', (await state(page)).home);
+    check('it is not recorded as an app', !(await saved(page)).appRecords.some(r => r.id === 'hdmi2'), (await saved(page)).appRecords);
+    check('it leaves the other column', !(await lines(page, 'other')).includes('HDMI 2') && (await lines(page, 'home')).at(-1) === 'HDMI 2', await lines(page, 'other'));
+    await nav(page, 'back'); await rested(page);
+    await nav(page, 'back'); await rested(page);
+    await goTo(page, 'home.app.hdmi2'); await rested(page);
+    const row = () => page.evaluate(() => ({ apps: document.querySelectorAll('.duo-app').length, logo: document.querySelector('.duo-app.is-focus img').getAttribute('src').split('/').pop(), width: document.querySelector('.duo-app.is-focus img').naturalWidth, pill: document.getElementById('duoPillLabel').textContent, glass: document.querySelector('#duoCapApps img').getAttribute('src') }));
+    let seen = await row();
+    check('the row shows it, in glass made for seven', seen.apps === 7 && seen.logo === 'hdmi.webp' && seen.width > 0 && seen.pill === 'HDMI 2' && seen.glass.includes('apps7-') && (await where(page)).focusCount === 1, seen);
+    await nav(page, 'ok'); await settled(page);
+    routed = await tv(page);
+    check('OK switches to the source', routed.sources.at(-1) === 2 && routed.launched.at(-1) === 'org.tizen.tv-viewer', routed.sources);
+    check('the source is remembered', (await state(page)).lastApp === 'hdmi2', (await state(page)).lastApp);
+    await page.reload(); await ready(page);
+    seen = await row();
+    check('it survives a restart', seen.apps === 7 && seen.pill === 'HDMI 2' && (await where(page)).focusAction === 'home.app.hdmi2', [seen, await where(page)]);
+    await page.evaluate(() => { window.__tv.refuseSource = true; });
+    await nav(page, 'ok'); await rested(page);
+    const refused = await card(page);
+    check('a refusal says so in a card', refused.title === 'HDMI 2' && /refusée/.test(refused.sub) && refused.rows.join() === 'Retour', refused);
+    await nav(page, 'ok'); await rested(page);
+    check('Retour comes back to the source', (await where(page)).focusAction === 'home.app.hdmi2' && (await where(page)).focusCount === 1, await where(page));
+    await page.context().close();
+  }
+  {
+    const page = await open({ home: DEFAULTS.concat('hdmi2') });
+    await openFromHome(page, 'util.inputs'); await rested(page);
+    for (let i = 0; i < 3; i++) await nav(page, 'down');
+    check('the last line chooses the devices', (await where(page)).focusAction === 'inputs.devices', await where(page));
+    await nav(page, 'ok'); await rested(page);
+    let c = await card(page);
+    const values = () => page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('.duo-card:not(.is-leaving) .duo-line-value'), el => el.textContent));
+    check('each port has its line', c.title === 'Appareils' && c.rows.join() === 'HDMI 1,HDMI 2,HDMI 3' && /nom de ce qui est branché/.test(c.sub), c);
+    check('no device is chosen yet', (await values()).every(v => v === 'Non choisi'), await values());
+    check('the selection is on a port', (await where(page)).focusAction === 'device.port.1' && (await where(page)).focusCount === 1, await where(page));
+    await nav(page, 'down', 'ok'); await rested(page);
+    c = await card(page);
+    check('a port offers the devices', c.title === 'Appareil sur HDMI 2' && c.rows.join() === 'Nintendo Switch,PlayStation,Xbox,Apple TV,Autre appareil', c);
+    check('each device has its logo', (await logos(page)).every(l => l[1]) && (await logos(page)).map(l => l[0]).join() === 'nintendoswitch.webp,playstation.webp,xbox.webp,appletv.webp,hdmi.webp', await logos(page));
+    check('it starts on the choice in place', c.checked.join() === 'Autre appareil' && (await where(page)).focusAction === 'device.set.other', [c.checked, await where(page)]);
+    await nav(page, 'up', 'up', 'up', 'up', 'ok'); await rested(page);
+    c = await card(page);
+    check('OK applies a device and stays', c.title === 'Appareil sur HDMI 2' && c.checked.join() === 'Nintendo Switch', c);
+    check('the choice is saved', (await saved(page)).devices[2] === 'nintendoswitch', (await saved(page)).devices);
+    await nav(page, 'back'); await rested(page);
+    c = await card(page);
+    check('the port shows its device', c.title === 'Appareils' && (await values())[1] === 'Nintendo Switch' && (await logos(page))[1][0] === 'nintendoswitch.webp' && (await where(page)).focusAction === 'device.port.2' && c.count === 1, [c, await values()]);
+    await nav(page, 'up', 'ok'); await rested(page);
+    check('another port starts on its own choice', (await card(page)).title === 'Appareil sur HDMI 1' && (await where(page)).focusAction === 'device.set.other', await where(page));
+    await nav(page, 'back'); await rested(page);
+    await nav(page, 'back'); await rested(page);
+    c = await card(page);
+    check('Entrées names the device and its port', c.title === 'Entrées' && c.rows[1] === 'Nintendo Switch · HDMI 2' && (await logos(page))[1][0] === 'nintendoswitch.webp' && (await where(page)).focusAction === 'inputs.devices', [c, await where(page)]);
+    await nav(page, 'back'); await rested(page);
+    await goTo(page, 'home.app.hdmi2'); await rested(page);
+    const row = () => page.evaluate(() => ({ logo: document.querySelector('.duo-app.is-focus img').getAttribute('src').split('/').pop(), width: document.querySelector('.duo-app.is-focus img').naturalWidth, pill: document.getElementById('duoPillLabel').textContent }));
+    let seen = await row();
+    check('the row takes the logo and the name', seen.logo === 'nintendoswitch.webp' && seen.width > 0 && seen.pill === 'Nintendo Switch' && (await where(page)).focusCount === 1, seen);
+    await openFromHome(page, 'util.apps'); await rested(page);
+    const names = await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('.duo-cell-name'), el => el.textContent));
+    check('All apps takes the name', names.at(-2) === 'Nintendo Switch', names);
+    await page.evaluate(() => ShoreQA.activate('apps.editor')); await rested(page);
+    check('the editor names the device and its port', (await lines(page, 'home')).at(-1) === 'Nintendo Switch · HDMI 2', await lines(page, 'home'));
+    await page.reload(); await ready(page);
+    seen = await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('.duo-app'), el => el.getAttribute('aria-label')));
+    check('the device survives a restart', seen.at(-1) === 'Nintendo Switch', seen);
+    await openFromHome(page, 'util.inputs'); await rested(page);
+    await page.evaluate(() => ShoreQA.activate('inputs.devices')); await rested(page);
+    await page.evaluate(() => ShoreQA.activate('device.port.2')); await rested(page);
+    check('coming back starts on the device in place', (await where(page)).focusAction === 'device.set.nintendoswitch', await where(page));
+    await nav(page, 'down', 'down', 'down', 'down', 'ok'); await rested(page);
+    check('Autre appareil gives the port its name back', (await card(page)).checked.join() === 'Autre appareil' && !(await saved(page)).devices[2], await saved(page));
+    await nav(page, 'back', 'back', 'back'); await rested(page);
+    await goTo(page, 'home.app.hdmi2'); await rested(page);
+    seen = await row();
+    check('and the row its HDMI logo', seen.logo === 'hdmi.webp' && seen.pill === 'HDMI 2', seen);
+    await page.context().close();
+  }
+  {
+    const page = await open({ home: ['netflix', 'hdmi2', 'hdmi3'], devices: { 1: 'constructor', 2: 'xbox', x: 'xbox', 3: 'toaster' } });
+    const s = await state(page);
+    check('a saved device must be a known one', JSON.stringify(s.devices) === '{"2":"xbox"}', s.devices);
+    const names = await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('.duo-app'), el => el.getAttribute('aria-label')));
+    check('the row reads the saved devices', names.join() === 'Netflix,Xbox,HDMI 3', names);
+    await page.context().close();
+  }
+  {
+    const page = await open({ home: ['hdmi2', 'netflix'], look: { layout: 'dock' } });
+    await loaded(page);
+    check('a source on Home does not trouble Dock', (await state(page)).home.join() === 'hdmi2,netflix' && (await where(page)).focusCount === 1, await where(page));
+    await page.evaluate(() => ShoreQA.activate('home.app.hdmi2')); await settled(page);
+    check('and OK still switches to it', (await tv(page)).sources.at(-1) === 2, (await tv(page)).sources);
+    await page.evaluate(() => ShoreQA.scene('apps')); await loaded(page);
+    check('Dock keeps its own All apps', !(await page.evaluate(() => ShoreQA.actions())).some(a => a.startsWith('apps.open.hdmi')) && (await state(page)).catalog.inputs.length === 0, await page.evaluate(() => ShoreQA.actions()));
+    await page.context().close();
+  }
+
+  section = 'The row follows the TV';
+  {
+    const page = await open({ missing: ['org.tizen.primevideo', 'rJeHak5zRg.Spotify'] });
+    await loaded(page); await settled(page);
+    check('the first opening keeps only the installed defaults', (await state(page)).home.join() === 'netflix,youtube,disneyplus,appletv', (await state(page)).home);
+    check('it is saved', (await saved(page)).dock.join() === 'netflix,youtube,disneyplus,appletv', (await saved(page)).dock);
+    const row = await page.evaluate(() => ({ apps: document.querySelectorAll('.duo-app').length, glass: document.querySelector('#duoCapApps img').getAttribute('src') }));
+    check('the row and its glass follow', row.apps === 4 && row.glass.includes('apps4-'), row);
+    check('the selection is on the first app', (await where(page)).focusAction === 'home.app.netflix' && (await where(page)).focusCount === 1, await where(page));
+    await goTo(page, 'home.app.youtube');
+    await uninstall(page, '9Ur5IzDKqV.TizenYouTube');
+    await page.evaluate(() => window.__tv.catalogue.push({ id: 'Qa12345678.Fresh', name: 'Fresh', show: true, iconPath: '' }));
+    await comeBack(page);
+    check('an uninstalled app leaves the row', (await state(page)).home.join() === 'netflix,disneyplus,appletv' && (await page.evaluate(() => document.querySelectorAll('.duo-app').length)) === 3, (await state(page)).home);
+    check('the selection moves to its neighbour', (await where(page)).focusAction === 'home.app.disneyplus' && (await where(page)).focusCount === 1, await where(page));
+    check('a new app does not join the row by itself', !(await state(page)).home.includes('Qa12345678.Fresh'), (await state(page)).home);
+    check('it arrives in All apps', (await state(page)).catalog.ids.includes('Qa12345678.Fresh'), (await state(page)).catalog.ids);
+    const writes = (await state(page)).writes;
+    await comeBack(page);
+    check('a read that finds nothing new writes nothing', (await state(page)).writes === writes, [(await state(page)).writes, writes]);
+    await page.context().close();
+  }
+  {
+    const page = await open({ home: ['hdmi2', 'netflix', 'youtube'] });
+    await loaded(page);
+    await openFromHome(page, 'util.settings');
+    await nav(page, 'down', 'down', 'ok'); await rested(page);
+    await page.evaluate(() => ShoreQA.activate('editor.remove.youtube')); await rested(page);
+    check('a removed app waits in the recent ones', (await state(page)).recent.join() === 'youtube', (await state(page)).recent);
+    await uninstall(page, 'org.tizen.netflix-app', '9Ur5IzDKqV.TizenYouTube');
+    await comeBack(page); await rested(page);
+    check('a source stays when the apps go', (await state(page)).home.join() === 'hdmi2', (await state(page)).home);
+    check('a recent app that has gone leaves the list', (await state(page)).recent.length === 0 && !(await lines(page, 'other')).includes('YouTube'), await lines(page, 'other'));
+    check('the editor keeps one selection', (await where(page)).focusCount === 1, await where(page));
+    await page.context().close();
+  }
+  {
+    const page = await open({ home: ['netflix'] });
+    await loaded(page);
+    await uninstall(page, 'org.tizen.netflix-app');
+    await comeBack(page);
+    check('a list without any app of the row leaves it alone', (await state(page)).home.join() === 'netflix', (await state(page)).home);
+    await page.evaluate(() => { window.__tv.catalogue = []; });
+    await comeBack(page);
+    check('so does an empty list', (await state(page)).home.join() === 'netflix', (await state(page)).home);
+    await page.context().close();
+  }
+  {
+    const page = await open({ home: ['netflix', 'youtube'] });
+    await loaded(page);
+    await page.evaluate(() => { window.__tv.noApps = true; });
+    await uninstall(page, 'org.tizen.netflix-app');
+    await comeBack(page);
+    check('a failed read leaves the row alone', (await state(page)).home.join() === 'netflix,youtube' && await toast(page) === '', [(await state(page)).home, await toast(page)]);
+    await page.context().close();
+  }
+  {
+    const page = await open();
+    await loaded(page);
+    await openFromHome(page, 'util.settings');
+    await nav(page, 'down', 'down', 'ok'); await rested(page);
+    await nav(page, 'ok');
+    const draft = (await state(page)).draft;
+    await uninstall(page, 'org.tizen.netflix-app');
+    await comeBack(page);
+    check('an app being carried is not pulled away', JSON.stringify((await state(page)).draft) === JSON.stringify(draft) && (await state(page)).home.length === 6, (await state(page)).draft);
+    await page.context().close();
+  }
+  {
+    const page = await open({ hidden: true });
+    await page.waitForTimeout(200);
+    check('nothing is read during hidden startup', (await tv(page)).reads === 0, (await tv(page)).reads);
+    await page.evaluate(() => { window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); });
+    await loaded(page);
+    check('the TV is read once on screen', (await tv(page)).reads === 1 && (await state(page)).catalog.inputs.length === 3, (await tv(page)).reads);
     await page.context().close();
   }
 

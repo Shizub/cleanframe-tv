@@ -89,6 +89,18 @@ test('apps outside the default Home stay listed, including Apple Music', () => {
   assert.equal(apps.find(a => a.name === 'Stremio').brand, '');
 });
 
+test('the catalogue also names everything installed, even what it hides', () => {
+  const h = harness();
+  let apps, installed;
+  h.device.apps((error, value, ids) => { assert.equal(error, null); apps = value; installed = ids; });
+  h.requests[0].ok([
+    { id: 'org.tizen.netflix-app', name: 'Netflix', show: true },
+    { id: 'Hidden1234.Consumer', name: 'Hidden app', show: false }
+  ]);
+  assert.equal(apps.length, 1);
+  assert.deepEqual([...installed], ['org.tizen.netflix-app', 'Hidden1234.Consumer']);
+});
+
 test('launch keeps its eight-second deadline independently of discovery', () => {
   const h = harness(), results = [];
   h.device.launchApp('Synthetic.App', error => results.push(error));

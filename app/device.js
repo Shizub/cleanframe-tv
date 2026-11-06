@@ -118,7 +118,7 @@
   function apps(done) {
     if (!api()) { unavailable(done); return; }
     // Large installed catalogues can take longer than a launch response.
-    var finish = bounded(done, 20000);
+    var finish = bounded(function (err, found) { if (err) done(err); else done(null, found.apps, found.installed); }, 20000);
     try {
       api().getAppsInfo(function (list) {
         var known = {}, seen = {}, result = [], self = selfId();
@@ -133,7 +133,7 @@
           result.push({ appId: a.id, name: a.name, brand: known[a.id] || EXTRA_BRANDS[a.id] || '', icon: a.iconPath || '', rank: primary ? Object.keys(IDS).indexOf(known[a.id]) : (stream ? 20 : 30) });
         });
         result.sort(function (a, b) { return a.rank - b.rank || a.name.toLowerCase().localeCompare(b.name.toLowerCase()); });
-        finish(null, result);
+        finish(null, { apps: result, installed: list.map(function (a) { return a.id; }) });
       }, function (err) { finish(failure(err)); });
     } catch (err) { finish(failure(err)); }
   }

@@ -34,7 +34,7 @@ Duo draws every panel as a card of frost over the wallpaper, in place of the scr
 - All apps: five columns of colour icons, with a badge on those on Home. Up from the first row reaches Organise Home.
 - Apps on Home: each app keeps a line that glides between On Home and Not on Home. Right from a name reaches its remove button, then the other column. Recently removed apps come first in Not on Home, without their own heading. Down from the top buttons returns to the column they were reached from.
 - Back on Home: a card offers to stay or open the Samsung menu, as a list.
-- Inputs: the selection lands on the active input once the TV has listed them.
+- Inputs: the selection lands on the active input once the TV has listed them. Its last line, Choose the devices, opens a card with each port, then a card with the devices for that port.
 - Short messages float above the card for two seconds: the order is saved, a change is undone, a limit is reached, or a save failed.
 
 Up/Down moves between rows. Left/Right moves between choices in a horizontal row. Focus alone changes neither the preview nor saved preferences in these appearance groups. Wallpaper has its own temporary photo preview, described below. OK applies the focused value. A checkmark identifies the applied value; the filled plate identifies remote focus. Applying the current value does not write again.
@@ -66,6 +66,8 @@ Open the editor from Settings or All apps. On Home shows the current order on th
 
 Removing the last Home app or adding a tenth app is prevented. A failed storage write keeps the committed choices and order, with a retry message. Saved native app IDs and names survive a restart or a failed catalogue refresh.
 
+Home follows the TV. Each time the catalogue is read, an app that is no longer installed leaves Home and Recently removed, silently. A new app only joins All apps, so a first run keeps just the default apps that are installed. A failed read changes nothing, and neither does a list without any of the apps on Home, which looks more like a fault of the TV than a row to empty. An app being carried in the editor waits for the next read.
+
 ## Art Mode and Samsung screens
 
 Art Mode sends an application control to the installed `org.tizen.art-app`, with `mode=fullscreen` and `requester=mobile`. This aims to enter native Art Mode with its current artwork, without toggling power or changing the selected artwork.
@@ -76,7 +78,7 @@ Samsung Home explicitly launches the original `com.samsung.tv.csfs` app, indepen
 
 All calls have bounded response handling. A failure leaves CleanFrame usable. No simulated device success views remain. Browser validation cannot confirm the visible Samsung destination.
 
-Installed-app discovery allows up to 20 seconds for large TV catalogues; launch controls retain an 8-second limit. Opening All apps or the editor refreshes the catalogue while retaining saved Home choices. No discovery polling runs during hidden startup.
+Installed-app discovery allows up to 20 seconds for large TV catalogues; launch controls retain an 8-second limit. The catalogue is read when the launcher comes on screen and each time All apps or the editor opens, while retaining saved Home choices. Nothing is read during hidden startup, and there is no polling.
 
 ## HDMI inputs
 
@@ -86,9 +88,11 @@ Up/Down selects an input. OK requests that exact source; Back returns to Samsung
 
 Selecting a source, opening Samsung’s viewer, seeing the expected HDMI picture and waking a CEC device are separate results. The portable implementation does not import firmware-specific viewer payloads or claim to wake a sleeping device. No input discovery or polling runs during hidden startup.
 
+In Duo, a source can also sit on Home like an app. All apps lists the sources after the apps, and Not on Home lists them before the apps. OK switches to that source through the same call as the chooser. A source stays on Home when its device sleeps or is unplugged, because it stands for the port. The TV's public API gives only the type and number of a port, so its name and logo come from the device chosen once for that port: Nintendo Switch, PlayStation, Xbox, Apple TV or Other device, which keeps the port's name and the HDMI logo. List and Dock keep their own All apps and editor, without sources. A source placed on Home in Duo still appears there, with its initials, and opens normally.
+
 ## Preferences and wallpaper
 
-The launcher stores appearance, Home order, recently removed apps, the last launched Home app, wallpaper and rotation locally. List and Dock share these preferences. The existing `cleanframe.home.v1` key is retained, with a fallback read from `cleanframe.shore.v1`. Legacy List maps to Dark + List + Type; Glass Dock and Glass Grid map to Photo + Dock + Glass. App order, wallpaper, rotation and the last Home app are preserved.
+The launcher stores appearance, Home order, recently removed apps, the last launched Home app, the device chosen for each port, wallpaper and rotation locally. List and Dock share these preferences. The existing `cleanframe.home.v1` key is retained, with a fallback read from `cleanframe.shore.v1`. Legacy List maps to Dark + List + Type; Glass Dock and Glass Grid map to Photo + Dock + Glass. App order, wallpaper, rotation and the last Home app are preserved.
 
 The gallery contains 15 bundled wallpapers. Settings → Background → Wallpaper keeps the two-pane Settings frame. Up/Down browses a vertical thumbnail list without wrapping; the right-hand Home preview shows the candidate while the surrounding Settings backdrop stays on the applied photo. OK applies the focused photo and stays in Wallpaper. The tick marks the applied photo and preview status distinguishes unsaved browsing. Back restores the latest applied photo, cancels pending loading and returns to Background’s Wallpaper row. Photo and material assets change as one complete bundle; a failed load restores the applied preview and offers retry. Preview loading waits briefly for remote focus to settle. OK during loading queues application for that photo; another browse move or Back cancels it. Browsing never saves, and repeated OK on the applied photo does not write again.
 

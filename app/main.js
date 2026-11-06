@@ -22,6 +22,8 @@
     { id: 'spotify', name: 'Spotify', mark: true, appId: 'rJeHak5zRg.Spotify' }
   ];
   var PRIMARY = PRIMARY_APPS.map(function (a) { return a.id; }), APPS = PRIMARY_APPS.slice(), ALPHA = [];
+  /* A source sits on Home like an app. The TV only gives its port, so its name and logo come from the device chosen for that port. */
+  var DEVICES = [['nintendoswitch', 'Nintendo Switch'], ['playstation', 'PlayStation'], ['xbox', 'Xbox'], ['appletv', 'Apple TV']], INPUT_IDS = [];
   var WEATHER_PLACE = { name: 'Paris', lat: 48.85, lon: 2.35 }, WEATHER_MS = 1800000, WEATHER_RETRY_MS = 300000;
   var weather = { text: '', temp: null, at: 0, loading: false };
   /* The Duo catalogue is empty unless the private overlay supplied its wallpaper and glass. */
@@ -94,6 +96,14 @@
 
   /* ---------- Helpers ---------- */
   function app(id) { for (var i = 0; i < APPS.length; i++) if (APPS[i].id === id) return APPS[i]; return null; }
+  function deviceName(id) { var found = DEVICES.filter(function (d) { return d[0] === id; })[0]; return found ? found[1] : ''; }
+  function nameInput(a, device) { a.device = device; a.brand = device || 'hdmi'; a.name = device ? deviceName(device) : a.port; }
+  function inputEntry(number, devices) {
+    var a = app('hdmi' + number);
+    if (!a) { a = { id: 'hdmi' + number, appId: 'hdmi' + number, input: number, port: 'HDMI ' + number, mark: false }; APPS.push(a); nameInput(a, devices[number] || ''); }
+    return a;
+  }
+  function inputLabel(a) { return a.device ? a.name + ' · ' + a.port : a.name; }
   function wall(id) { for (var i = 0; i < WALLS.length; i++) if (WALLS[i].id === id) return WALLS[i]; return null; }
   function wallIndex(id) { for (var i = 0; i < WALLS.length; i++) if (WALLS[i].id === id) return i; return 0; }
   function frostClass(w) { var i = [.12, .20, .30, .36, .44].indexOf(w.frostVeil); return i > 0 ? ' fv-' + (i + 1) : ''; }
@@ -333,18 +343,21 @@
   }
   function clean(saved) {
     var s = saved && typeof saved === 'object' ? saved : {}, modern = s.look && typeof s.look === 'object' ? s.look : s;
-    var legacyList = s.theme === 'list', h = [], recent = [], records = Array.isArray(s.appRecords) ? s.appRecords : [];
+    var legacyList = s.theme === 'list', h = [], recent = [], devices = {}, records = Array.isArray(s.appRecords) ? s.appRecords : [];
+    function savedInput(id) { if (/^hdmi\d{1,2}$/.test(id)) inputEntry(Number(id.slice(4)), devices); }
     records.slice(0, 256).forEach(function (a) {
       if (!a || !safeId(a.id) || !safeId(a.appId) || typeof a.name !== 'string' || !a.name.trim() || app(a.id)) return;
       APPS.push({ id: a.id, appId: a.appId, name: a.name.slice(0, 160), brand: ['hbomax', 'spotify', 'tubi', 'applemusic'].indexOf(a.brand) >= 0 ? a.brand : '', mark: ['hbomax', 'spotify', 'tubi', 'applemusic'].indexOf(a.brand) >= 0, icon: safeIcon(a.icon) });
     });
+    Object.keys(s.devices && typeof s.devices === 'object' ? s.devices : {}).slice(0, 16).forEach(function (port) { if (/^\d{1,2}$/.test(port) && deviceName(s.devices[port])) devices[port] = s.devices[port]; });
     (Array.isArray(s.home) ? s.home : Array.isArray(s.dock) ? s.dock : []).forEach(function (id) {
       if (!safeId(id) || h.indexOf(id) >= 0 || h.length >= CAP) return;
+      savedInput(id);
       if (!app(id) && id.indexOf('.') > 0) APPS.push({ id: id, appId: id, name: id.split('.').pop(), mark: false });
       if (app(id)) h.push(id);
     });
     if (!h.length) h = PRIMARY.slice();
-    (Array.isArray(s.recent) ? s.recent : []).forEach(function (id) { if (safeId(id) && app(id) && h.indexOf(id) < 0 && recent.indexOf(id) < 0 && recent.length < 5) recent.push(id); });
+    (Array.isArray(s.recent) ? s.recent : []).forEach(function (id) { if (safeId(id)) savedInput(id); if (safeId(id) && app(id) && h.indexOf(id) < 0 && recent.indexOf(id) < 0 && recent.length < 5) recent.push(id); });
     // Duo is drawn on its own wallpaper, so it always counts as a photo background.
     var layout = pick(modern.layout, LOOK_VALUES.layout, legacyList ? 'list' : DUO ? 'duo' : 'dock');
     return {
@@ -352,7 +365,7 @@
       apps: pick(modern.apps, LOOK_VALUES.apps, legacyList ? 'text' : 'both'), controls: pick(modern.controls, LOOK_VALUES.controls, 'both'),
       focus: pick(modern.focus, LOOK_VALUES.focus, legacyList ? 'type' : 'glass'), material: pick(modern.material, LOOK_VALUES.material, 'soft'),
       font: pick(modern.font, LOOK_VALUES.font, 'manrope'), wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
-      home: h, recent: recent, lastApp: h.indexOf(s.lastApp) >= 0 ? s.lastApp : h[0],
+      home: h, recent: recent, devices: devices, lastApp: h.indexOf(s.lastApp) >= 0 ? s.lastApp : h[0],
       mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed')
     };
   }
@@ -364,7 +377,7 @@
     out.appRecords = [];
     c.home.concat(c.recent).forEach(function (key) {
       var a = app(key);
-      if (a && PRIMARY.indexOf(key) < 0 && !out.appRecords.some(function (r) { return r.id === key; })) out.appRecords.push({ id: a.id, appId: a.appId, name: a.name, brand: a.brand || '', icon: a.icon || '' });
+      if (a && !a.port && PRIMARY.indexOf(key) < 0 && !out.appRecords.some(function (r) { return r.id === key; })) out.appRecords.push({ id: a.id, appId: a.appId, name: a.name, brand: a.brand || '', icon: a.icon || '' });
     });
     return out;
   }
@@ -378,7 +391,7 @@
   }
   function clearSession() { S.undo = []; S.removedAt = {}; S.note = null; S.err = null; }
   function begin() { S.note = null; }
-  function next(home, recent) { var c = lookOf(S.c); c.home = home; c.recent = recent; c.lastApp = S.c.lastApp; c.mode = S.c.mode; return c; }
+  function next(home, recent) { var c = lookOf(S.c); c.home = home; c.recent = recent; c.devices = S.c.devices; c.lastApp = S.c.lastApp; c.mode = S.c.mode; return c; }
   function snap() { return { home: S.c.home.slice(), recent: S.c.recent.slice() }; }
   function pushRecent(list, id) { return [id].concat(without(list, id)).slice(0, 5); }
   function write(c, label) {
@@ -468,17 +481,38 @@
     if (!a || busy) return;
     if (S.c.home.indexOf(id) >= 0) { c = next(S.c.home.slice(), S.c.recent.slice()); c.lastApp = id; write(c, 'Dernière appli'); }
     S.press = id; S.lastLaunch = a.name;
-    perform(a.name, function (done) { FrameDevice.launchApp(a.appId, done); });
+    perform(a.name, function (done) {
+      if (!a.port) { FrameDevice.launchApp(a.appId, done); return; }
+      FrameDevice.setSource(a.input, function (err) { done(!document.hidden && !(err && err.cancelled) ? err : null); });
+    });
+  }
+  /* Home follows the TV: an app that has gone leaves the row, and a new one only joins All apps. A source is a port, so it stays. */
+  function syncHome(installed) {
+    function here(id) { var a = app(id); return a && (a.port || installed.indexOf(a.appId) >= 0); }
+    var home = S.c.home.filter(here), recent = S.c.recent.filter(here), err = S.err;
+    // A list without any of them looks more like a fault of the TV than a row to empty.
+    if (!home.length || top().lifted || same(home, S.c.home) && same(recent, S.c.recent)) return;
+    if (!write(next(home, recent), 'Applis désinstallées')) S.err = err;
+  }
+  function knownInputs(list) {
+    var ids = list.map(function (input) { return inputEntry(input.number, S.c.devices).id; });
+    if (!ids.length || same(ids, INPUT_IDS)) return false;
+    INPUT_IDS = ids; catalog.revision++;
+    return true;
+  }
+  function refreshSources() {
+    FrameDevice.sources(function (err, list) { if (!err && knownInputs(list)) { norm(); render(); } });
   }
   function refreshCatalog() {
     var request, oldFocus;
     if (catalog.loading) return;
     request = ++catalog.request; catalog.loading = true; catalog.error = null;
-    FrameDevice.apps(function (err, entries) {
+    if (S.c.layout === 'duo') refreshSources();
+    FrameDevice.apps(function (err, entries, installed) {
       if (request !== catalog.request) return;
       catalog.loading = false;
       if (err) { catalog.error = err.message || 'Impossible de lire les applis installées.'; if (!catalog.loaded) ALPHA = []; render(); return; }
-      oldFocus = top().id === 'apps' ? ALPHA[top().f.i] : null;
+      oldFocus = top().id === 'apps' ? appsItems()[top().f.i] : null;
       ALPHA = [];
       entries.forEach(function (entry) {
         var id = PRIMARY.indexOf(entry.brand) >= 0 ? entry.brand : entry.appId, a;
@@ -492,7 +526,8 @@
       });
       ALPHA.sort(function (a, b) { return app(a).name.toLowerCase().localeCompare(app(b).name.toLowerCase()); });
       catalog.loaded = true; catalog.error = null; catalog.revision++;
-      if (top().id === 'apps' && oldFocus && ALPHA.indexOf(oldFocus) >= 0) top().f.i = ALPHA.indexOf(oldFocus);
+      syncHome(installed);
+      if (top().id === 'apps' && oldFocus && appsItems().indexOf(oldFocus) >= 0) top().f.i = appsItems().indexOf(oldFocus);
       norm(); render();
     });
   }
@@ -520,7 +555,7 @@
   }
   function openMessage(key) { push({ id: 'message', msg: key, f: { b: 0 } }); }
   function openApps() {
-    var e = { id: 'apps', mode: 'browse', top: 0, f: { zone: 'grid', i: Math.max(0, ALPHA.indexOf(S.appsFocus)), h: 0 } };
+    var e = { id: 'apps', mode: 'browse', top: 0, f: { zone: 'grid', i: Math.max(0, appsItems().indexOf(S.appsFocus)), h: 0 } };
     push(e); refreshCatalog(); return e;
   }
   function openEditor(origin) {
@@ -691,7 +726,8 @@
   };
 
   /* ---------- Installed apps ---------- */
-  function appsItems() { return catalog.error ? [] : ALPHA; }
+  function shownInputs() { return S.c.layout === 'duo' ? INPUT_IDS : []; }
+  function appsItems() { return catalog.error ? [] : ALPHA.concat(shownInputs()); }
   function appsHead() { return catalog.error ? [['retry', 'Réessayer', '', '']] : [['editor', 'Applis de l’accueil', '', 'home']]; }
   V.apps = {
     sheet: true,
@@ -722,7 +758,7 @@
   /* ---------- B: two-zone Home editor ---------- */
   function otherGroups() {
     var rec = S.c.recent.filter(function (id) { return !onHome(id) && app(id); });
-    return { recent: rec, rest: ALPHA.filter(function (id) { return !onHome(id) && rec.indexOf(id) < 0; }) };
+    return { recent: rec, rest: shownInputs().concat(ALPHA).filter(function (id) { return !onHome(id) && rec.indexOf(id) < 0; }) };
   }
   function otherList() { var o = otherGroups(); return o.recent.concat(o.rest); }
   function editorCut() { return S.c.layout === 'duo' ? CAP : 5; }
@@ -858,7 +894,7 @@
     if (id === 'editor') openEditor('settings');
     else openAppearance(id);
   }
-  var DETAIL_NAMES = { background: 'Fond', layout: 'Disposition', typography: 'Typographie', focus: 'Sélection', rotation: 'Rotation', samsung: 'Samsung', inputs: 'Entrées', scheme: 'Apparence' };
+  var DETAIL_NAMES = { background: 'Fond', layout: 'Disposition', typography: 'Typographie', focus: 'Sélection', rotation: 'Rotation', samsung: 'Samsung', inputs: 'Entrées', devices: 'Appareils', scheme: 'Apparence' };
   function choice(axis, value, disabled) {
     return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled,
       label: axis === 'font' ? FONTS[value].name : axis === 'mode' ? MODES.filter(function (m) { return m.id === value; })[0].name : value === 'both' ? 'Les deux' : VALUE_NAMES[value] };
@@ -867,9 +903,17 @@
     var flat = S.c.bg !== 'photo', inactive = !materialApplies();
     function options(axis, values, disabled) { return values.map(function (value) { return choice(axis, value, disabled); }); }
     if (t.group === 'inputs') return [{ id: 'inputs', title: '', items: t.inputs.length ? t.inputs.map(function (input) {
-      return { action: 'input.' + input.number, label: input.name, active: input.active, connected: input.connected, description: input.active ? 'Active' : input.connected ? 'Connectée' : 'Déconnectée, peut-être en veille' };
-    }) : [{ action: 'inputs.retry', label: t.loading ? 'Chargement des entrées…' : 'Réessayer', disabled: t.loading }],
+      var a = S.c.layout === 'duo' ? inputEntry(input.number, S.c.devices) : null;
+      return { action: 'input.' + input.number, label: a ? inputLabel(a) : input.name, logo: a && a.brand, active: input.active, connected: input.connected, description: input.active ? 'Active' : input.connected ? 'Connectée' : 'Déconnectée, peut-être en veille' };
+    }).concat(S.c.layout === 'duo' ? [{ action: 'inputs.devices', label: 'Choisir les appareils', chevron: true }] : []) : [{ action: 'inputs.retry', label: t.loading ? 'Chargement des entrées…' : 'Réessayer', disabled: t.loading }],
       reason: t.inputError || (!t.loading && !t.inputs.length ? 'La télé n’a signalé aucune entrée HDMI.' : '') }];
+    if (t.group === 'devices') return [{ id: 'devices', title: '', reason: 'La télé ne donne pas le nom de ce qui est branché : choisissez-le une fois pour chaque prise.', items: INPUT_IDS.map(function (id) {
+      var a = app(id);
+      return { action: 'device.port.' + a.input, label: a.port, logo: a.brand, description: a.device ? a.name : 'Non choisi', chevron: true };
+    }) }];
+    if (t.group === 'device') return [{ id: 'device', title: '', items: DEVICES.concat([['', 'Autre appareil']]).map(function (d) {
+      return { action: 'device.set.' + (d[0] || 'other'), label: d[1], logo: d[0] || 'hdmi', device: d[0], active: inputEntry(t.port, S.c.devices).device === d[0] };
+    }) }];
     if (t.group === 'background') return [
       { id: 'bg', title: 'Type de fond', items: options('bg', ['photo', 'light', 'dark']) },
       { id: 'wall', title: 'Fond d’écran', items: [{ action: 'background.wallpaper', label: wall(S.c.wall).name, thumbnail: true, disabled: flat }] },
@@ -892,7 +936,7 @@
     if (S.c.layout === 'duo') return [{ id: 'samsung', title: '', items: [
       { action: 'samsung.home', label: samsungName() },
       { action: 'samsung.settings', label: 'Réglages de la télé' },
-      { action: 'samsung.inputs', label: 'Entrées' }
+      { action: 'samsung.inputs', label: 'Entrées', chevron: true }
     ] }];
     return [{ id: 'samsung', title: '', items: [
       { action: 'samsung.home', label: 'Accueil Samsung', description: 'Ouvrir l’écran d’accueil de Samsung' },
@@ -937,6 +981,7 @@
     FrameDevice.sources(function (err, list) {
       if (top() !== t) return;
       t.loading = false; t.inputs = list || []; t.inputError = err ? err.message : null;
+      if (list && S.c.layout === 'duo') knownInputs(list);
       // Only Back or the wait could hold the selection until now: it moves to the list.
       if (t.f.action === 'settings.back' || t.f.action === 'inputs.retry') t.f.action = null;
       after();
@@ -946,6 +991,16 @@
     openAppearance('inputs'); var t = top(); t.fromHome = !!fromHome; t.inputs = []; loadInputs(t);
   }
   function detailBack() { cancelLook(); S.err = null; pop(); FrameDevice.cancelSource(); }
+  function chooseDevice(port, device) {
+    var a = inputEntry(port, S.c.devices), devices = {}, c;
+    if (a.device === device) return;
+    Object.keys(S.c.devices).forEach(function (key) { devices[key] = S.c.devices[key]; });
+    if (device) devices[port] = device; else delete devices[port];
+    c = next(S.c.home.slice(), S.c.recent.slice()); c.devices = devices;
+    if (!write(c, 'Appareil sur ' + a.port)) return;
+    nameInput(a, device);
+    catalog.revision++; duo.rowKey = null;
+  }
   function detailOk(t, item) {
     var patch = {}, error = S.lookError;
     if (item.action === 'settings.back') { detailBack(); return; }
@@ -962,6 +1017,9 @@
     else if (item.action === 'samsung.settings') perform('Réglages de la télé', FrameDevice.settings);
     else if (item.action === 'samsung.inputs') openInputs();
     else if (item.action === 'inputs.retry') loadInputs(t);
+    else if (item.action === 'inputs.devices') openAppearance('devices');
+    else if (item.action.indexOf('device.port.') === 0) { delete S.detailFocus.device; openAppearance('device'); top().port = Number(item.action.slice(12)); }
+    else if (item.action.indexOf('device.set.') === 0) chooseDevice(t.port, item.device);
     else if (item.action.indexOf('input.') === 0) perform(item.label, function (done) {
       FrameDevice.setSource(Number(item.action.slice(6)), function (err) {
         t.refreshInputs = true;
@@ -1546,11 +1604,10 @@
     detailSections(t).forEach(function (section) { if (section.reason) sub = section.reason; });
     if (S.lookError) sub = (S.lookError.type === 'save' ? 'Impossible d’enregistrer ce changement.' : 'Impossible de charger cette apparence.') + ' Votre choix actuel est conservé.';
     detailRows(t).forEach(function (items) { items.forEach(function (item) {
-      var source = item.action.indexOf('input.') === 0;
-      rows.push({ z: 'detail', id: item.action, action: item.action, label: item.label, value: item.active ? '' : item.description, icon: source ? 'hdmi' : '', chevron: item.action === 'samsung.inputs',
+      rows.push({ z: 'detail', id: item.action, action: item.action, label: item.label, value: item.active ? '' : item.description, icon: item.logo || '', chevron: item.chevron,
         checked: item.axis ? S.c[item.axis] === item.value : !!item.active, dim: item.disabled || item.connected === false, disabled: item.disabled, focus: item.action === t.f.action });
     }); });
-    return { w: 1100, title: DETAIL_NAMES[t.group], sub: sub, rows: rows, minRows: t.group === 'inputs' ? 4 : 0 };
+    return { w: 1100, title: t.group === 'device' ? 'Appareil sur ' + inputEntry(t.port, S.c.devices).port : DETAIL_NAMES[t.group], sub: sub, rows: rows, minRows: t.group === 'inputs' ? 5 : 0 };
   }
   function duoLineHtml(r) {
     return '<div class="duo-line" role="button" data-z="' + r.z + '" data-i="' + (r.i || 0) + '"' + (r.id ? ' data-id="' + esc(r.id) + '"' : '') + ' data-action="' + esc(r.action) + '" aria-label="' + esc(r.label) + '">'
@@ -1558,7 +1615,7 @@
       + (r.chevron ? icon('right') : '') + '<span class="duo-tick">' + icon('check') + '</span></div>';
   }
   function duoFillList(card, model) {
-    var rows = model.rows, sig = model.title + '|' + rows.map(function (r) { return r.action; }).join(), index = -1, moved = false, i, r, el, cls, target;
+    var rows = model.rows, sig = model.title + '|' + rows.map(function (r) { return [r.action, r.icon || '', r.label].join(); }).join('|'), index = -1, moved = false, i, r, el, cls, target;
     rows.forEach(function (row, n) { if (row.focus && !row.disabled) index = n; });
     if (card.sig !== sig) {
       duoSizeCard(card, model.w, card.h || 400);
@@ -1672,7 +1729,7 @@
         + '<div class="duo-column-title" style="left:84px">Sur l’accueil · <span class="duo-count"></span> sur ' + CAP + '</div><div class="duo-column-title" style="left:804px">Pas sur l’accueil</div><div class="duo-edit-status"></div>'
         + '<div class="duo-editor-window"><div class="duo-mover duo-plate duo-eplate"><div class="duo-lift"></div></div><div class="duo-mover duo-plate duo-edot"></div>'
         + ids.map(function (id) {
-          return '<div class="duo-mover duo-eline"><div class="duo-eline-main" role="button" aria-label="' + esc(app(id).name) + '">' + duoIcon(app(id)) + '<span class="duo-eline-name">' + esc(app(id).name) + '</span></div><div class="duo-eline-rm" role="button" aria-label="' + esc('Retirer ' + app(id).name + ' de l’accueil') + '">' + icon('minus') + '</div></div>';
+          return '<div class="duo-mover duo-eline"><div class="duo-eline-main" role="button" aria-label="' + esc(inputLabel(app(id))) + '">' + duoIcon(app(id)) + '<span class="duo-eline-name">' + esc(inputLabel(app(id))) + '</span></div><div class="duo-eline-rm" role="button" aria-label="' + esc('Retirer ' + app(id).name + ' de l’accueil') + '">' + icon('minus') + '</div></div>';
         }).join('') + '</div>';
       duoBindTiles(card.content);
       card.sig = sig;
@@ -2524,7 +2581,7 @@
       release();
       if (S.c.bg === 'photo' && !S.pending && !S.previewBundle && (!committedBundle || S.bundleKey !== bundleKey(S.c))) setLook({}, { transient: true, startup: true });
       setDuoIdle(false); duoTouch();
-      refreshInputsOnReturn(); after(); updateClock(); focusStage();
+      refreshInputsOnReturn(); after(); updateClock(); focusStage(); refreshCatalog();
     }
   });
   window.addEventListener('resize', fit);
@@ -2536,7 +2593,7 @@
     out.duo = S.c.layout === 'duo' ? { level: duo.level, scheme: duo.scheme, idle: duo.idle, clock: duo.text } : null;
     out.committed = S.c; out.shown = S.shown; out.pending = S.pending; out.view = t.id; out.selected = S.sel;
     out.focusAction = focusedAction(); out.writes = S.writes; out.failedWrites = S.failed; out.error = S.err;
-    out.catalog = { loading: catalog.loading, loaded: catalog.loaded, error: catalog.error, ids: ALPHA.slice() };
+    out.catalog = { loading: catalog.loading, loaded: catalog.loaded, error: catalog.error, ids: ALPHA.slice(), inputs: INPUT_IDS.slice() };
     out.fonts = { available: LOOK_VALUES.font.slice(), loaded: Object.keys(fontMetrics).filter(function (id) { return !fontMetrics[id].fallback; }), baselineFallback: !!(fontMetrics.manrope && fontMetrics.manrope.fallback), error: S.lookError && S.lookError.type === 'font' ? S.lookError : null };
     out.rotation = { activeMs: activeMs + (activeSince ? Date.now() - activeSince : 0), active: !!activeSince };
     out.draft = t.lifted ? { id: t.lifted.id, order: t.lifted.order.slice() } : null;
@@ -2568,4 +2625,5 @@
   initialise();
   setLook({}, { transient: true, startup: true });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); duoTouch();
+  if (!document.hidden) refreshCatalog();
 })();
