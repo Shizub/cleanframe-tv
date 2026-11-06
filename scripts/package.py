@@ -1,9 +1,10 @@
-"""Build and sign through an existing official Tizen SDK profile (macOS/Linux)."""
+"""Build and sign through an existing official Tizen SDK profile (macOS/Linux). With --unsigned, only build."""
 import os
 from pathlib import Path
 import pty
 import select
 import signal
+import sys
 import tempfile
 import termios
 import time
@@ -81,6 +82,15 @@ def sign(command, password=None, timeout=60):
     return os.waitstatus_to_exitcode(status)
 
 
+def build_unsigned(root=ROOT):
+    """For a signing route of the owner's choice: no SDK, no certificate, no TV."""
+    (root / 'dist').mkdir(exist_ok=True)
+    unsigned = root / 'dist/CleanFrame-unsigned.wgt'
+    write_widget_archive(unsigned, root=root, identity=load_settings(root)['identity'])
+    print('Unsigned widget created: ' + str(unsigned))
+    print('It can hold private fonts and the Duo files: keep it private.')
+
+
 def main(root=ROOT):
     settings = load_settings(root)
     cli = settings['sdk_path'] / 'tools/ide/bin/tizen'
@@ -108,7 +118,10 @@ def main(root=ROOT):
 
 if __name__ == '__main__':
     try:
-        main()
+        if '--unsigned' in sys.argv:
+            build_unsigned()
+        else:
+            main()
     except (ValueError, OSError, zipfile.BadZipFile, termios.error) as error:
         # Known validation messages contain no credentials. Suppress SDK/OS payloads.
         message = str(error) if isinstance(error, ValueError) else 'Cannot complete packaging. Check SDK/profile setup and local file permissions.'

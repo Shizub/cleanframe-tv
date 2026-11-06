@@ -1,6 +1,6 @@
 # TV compatibility evidence
 
-Updated 2 November 2026. The web launcher has a Tizen 5.0 installation minimum. This admits older packages; it does not establish that every rendering path, Samsung destination or native Home operation works on every admitted TV. Contributor observations and the maintainer’s checks are listed separately. Tizen 4.0 remains an owner-adapted experiment.
+Updated 6 November 2026. The web launcher has a Tizen 5.0 installation minimum. This admits older packages; it does not establish that every rendering path, Samsung destination or native Home operation works on every admitted TV. Contributor observations and the maintainer’s checks are listed separately. Tizen 4.0 remains an owner-adapted experiment.
 
 ## Recorded results
 
@@ -32,6 +32,10 @@ The AU8000 result used a shell-only helper rather than the maintained .NET 6 hel
 The S85F report used a local guard adaptation for `T-PTMFUABC-0090-1301.0`; the maintained guard still refuses that target. Apps2Samsung is the contributor’s signing route, not a separately reviewed replacement for the official SDK workflow in this repo.
 
 For the LS03F, a blocked execution/readback path stopped the experiment before baseline capture. Its source-resume result is distinct from native app startup. These observations concern that tested route and firmware; they do not prove that every 2025 TV has the same limitation.
+
+## Duo layout
+
+The Duo layout, with its sounds and its volume pill, has no TV result. It has only run in a recent desktop browser with a simulated TV, and nothing in the table above applies to it. `scripts/check.py` rejects the CSS and JavaScript that Chromium 85 lacks, which lowers the risk on Tizen 6.5 without removing it. The Web Audio method, the delay between image and sound, Samsung's banner beside the pill, the `tv.audio` privilege and the `VIDEOSOURCE` listener are only known on a TV.
 
 ## Native Home limits
 

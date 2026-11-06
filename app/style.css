@@ -22,6 +22,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 @font-face{font-family:'Duo Geist';font-style:normal;font-weight:100 900;src:url('assets/fonts/geist/Geist-Variable.ttf') format('truetype');font-display:block}
 .duo-home{display:none;position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;color:#fff;font-family:'Duo Geist',Arial,sans-serif;font-size:32px;line-height:1.2}
 .l-duo .duo-home{display:block}
+.duo-home{transition:opacity 320ms ease-out}
+.duo-home.is-arriving{opacity:0}
 .l-duo .bg,.l-duo .caption,.l-duo .utils,.l-duo .util-focus-label,.l-duo .app-focus-name,.l-duo .ut-lens,.l-duo .dock,.l-duo .cue,.l-duo .dock-action,.l-duo .ph-scene{display:none}
 .duo-home img{position:absolute;left:0;top:0;display:block;max-width:none}
 .duo-home .duo-fill{width:1920px;height:1080px}

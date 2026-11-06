@@ -7,6 +7,7 @@
     "dev": "python3 scripts/preview.py",
     "check": "npm run lint && python3 scripts/check.py && npm run check:device && npm run check:motion && npm run check:sound",
     "package": "python3 scripts/package.py",
+    "package:unsigned": "python3 scripts/package.py --unsigned",
     "tv:info": "python3 scripts/tv.py info",
     "tv:install": "python3 scripts/tv.py install",
     "tv:launch": "python3 scripts/tv.py launch",

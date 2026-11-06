@@ -33,6 +33,7 @@ The public preview uses the included Manrope, Geist and Newsreader fonts.
 - Choose and reorder Home apps; discover installed apps on the TV.
 - Select from fifteen wallpapers and save your preferences locally.
 - Open Settings → Samsung → Inputs to choose a discovered HDMI source.
+- In a personal build, use the Duo layout: a tall clock over a wallpaper that follows the sun, apps and sources in one row of baked glass, a sound for each gesture and a volume pill. Its wallpaper and glass come from your own private files in ignored `.local/duo/`. Without them, as in the public preview and export, Duo is not offered. It has not been tried on a TV yet.
 
 The glass and blur are rendered ahead of time. The TV loads the finished images and uses transforms and opacity for focus feedback.
 
@@ -82,6 +83,8 @@ CLEANFRAME_PUBLIC_FONTS=1 npm run check:browser
 npm run check:public
 npm run export:public
 ```
+
+`npm run check:duo` drives the Duo layout with a simulated TV and skips itself without the private files. `npm run package:unsigned` writes a personal `dist/CleanFrame-unsigned.wgt` for your own signing route; it can hold private fonts and the Duo files, so keep it private.
 
 `npm run check`, including its `check:device` command, runs only source checks and synthetic device-adapter tests. It never connects to a TV. The browser checks use isolated Chromium profiles and a loopback preview. They never contact a TV. The public export creates `dist/CleanFrame-public-unsigned.wgt`, with public fonts and notices. It needs your own identity and signing before installation. It does not certify asset redistribution rights or device compatibility.
 

@@ -4,7 +4,7 @@
 
 - Dock: Left/Right scrolls the apps without wrapping. Up enters the top-right controls, starting with Art Mode or the last selected control. Left/Right moves between Art Mode, Inputs, All apps, Samsung Home and Settings. Down or Back returns to the selected app. The clock is at the top left.
 - List: Up/Down scrolls the apps without wrapping. Right enters the bottom-right controls, aligned with the clock above. Up/Down moves between Art Mode, All apps and Settings. Left or Back returns to the selected app. The list fades at both ends as it scrolls.
-- Duo (personal builds with the private files): apps and the five controls form one row. Left/Right walks along it without wrapping and bounces once per press at each end; a held key does not repeat the bounce. Up and Down do nothing. Back opens the choice to stay or open Samsung Home. After 20 seconds on Home the row fades out, and the first key only brings it back.
+- Duo (personal builds with the private files, where it is the default for a new installation): apps and the five controls form one row. Left/Right walks along it without wrapping and bounces once per press at each end; a held key does not repeat the bounce. Up and Down do nothing. Back opens the choice to stay or open Samsung Home. After 20 seconds on Home the row fades out, and the first key only brings it back. On starting, the launcher stays hidden until its images are ready, for at most 2.5 seconds, then fades in whole.
 - OK opens the selected item. Focus alone never launches an app.
 - Icons-only apps and controls reveal their names when focused. App presentation and control presentation are independent.
 - Back from the app list or Dock opens a choice to stay or open Samsung Home.
@@ -24,7 +24,7 @@ Settings opens a grouped overview: Background, Layout, Typography, Focus, Apps o
 | Apps on Home | Membership and arrangement editor |
 | Samsung | Samsung Home, TV settings and Inputs |
 
-In Duo, Settings keeps Appearance (Auto, Day or Night), Layout, Apps on Home and Samsung. Background, Typography and Focus do not apply to this layout. Auto follows the sun at the configured weather place.
+In Duo, Settings keeps Appearance (Auto, Day or Night), Layout, Sounds, Apps on Home and Samsung. Background, Typography and Focus do not apply to this layout. Auto follows the sun at the configured weather place.
 
 ### Duo panels
 

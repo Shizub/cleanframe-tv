@@ -158,6 +158,14 @@ class ToolTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             write_widget_archive(public, root=self.root, include_private=False)
 
+    def test_unsigned_build_needs_no_sdk_or_certificate(self):
+        self.config(profile='Synthetic', sdk_path='missing-sdk', package_id='AbCdE12345', app_id='AbCdE12345.Frame')
+        with contextlib.redirect_stdout(io.StringIO()):
+            package.build_unsigned(self.root)
+        with zipfile.ZipFile(self.root / 'dist/CleanFrame-unsigned.wgt') as archive:
+            self.assertEqual(manifest_identity(archive.read('config.xml')), {'package_id': 'AbCdE12345', 'app_id': 'AbCdE12345.Frame'})
+        self.assertFalse((self.root / 'dist/CleanFrame.wgt').exists())
+
     def test_export_ignores_local_signing_config(self):
         output = self.root / 'public.wgt'
         write_widget_archive(output, root=self.root, include_private=False)

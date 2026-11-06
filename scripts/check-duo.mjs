@@ -1,5 +1,7 @@
 // Duo layout in fresh browsers with a simulated TV. It needs the private files in .local/duo/, so a public checkout skips it.
-import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { chromium } from 'playwright';
 import { networkQuiet, openPreview, root } from './browser.mjs';
 
 if (!existsSync(root + '.local/duo/glass/manifest.json')) {
@@ -20,6 +22,10 @@ function check(name, ok, detail) {
 /* Runs in the page, before the app. The same public API shape as the real adapter expects. */
 function installTv(seed) {
   if (seed.value && !localStorage.getItem(seed.key)) localStorage.setItem(seed.key, JSON.stringify(seed.value));
+  const frame = window.requestAnimationFrame;
+  window.__frames = 0;
+  window.requestAnimationFrame = run => { window.__frames++; return frame.call(window, run); };
+  if (seed.noTv) return;
   window.__hidden = !!seed.hidden;
   Object.defineProperty(document, 'hidden', { configurable: true, get: () => window.__hidden });
   const tv = window.__tv = { launched: [], controls: [], sources: [], reads: 0, refuse: false, refuseSource: false, noSources: false, noApps: false, connected: [1, 2], keys: [], volume: { level: 18, muted: false, refuse: false } };
@@ -60,21 +66,25 @@ function installTv(seed) {
 }
 
 const preview = await openPreview({ duo: true });
-async function open({ home, look, time, clock, more, missing, hidden, devices, noAudio } = {}) {
-  const context = await preview.browser.newContext({ viewport: { width: 1920, height: 1080 }, timezoneId: 'Europe/Paris' });
+async function open({ home, look, time, clock, more, missing, hidden, devices, noAudio, noTv, prepare, wait = true, viewport = { width: 1920, height: 1080 }, browser = preview.browser, url = preview.baseURL + '/home/' } = {}) {
+  const context = await browser.newContext({ viewport, timezoneId: 'Europe/Paris' });
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   page.sounds = [];
+  page.failed = [];
+  page.on('requestfailed', request => page.failed.push(request.url()));
   page.on('request', request => { if (request.url().endsWith('.pcm')) page.sounds.push(request.url().split('/').pop()); });
   page.on('pageerror', error => check('no page error', false, error.message));
   page.on('response', response => { if (response.status() >= 400) check('no failed request', false, response.status() + ' ' + response.url()); });
   await page.route('https://api.open-meteo.com/**', route => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ current: { temperature_2m: 12.4, weather_code: 3 } }) }));
   const value = home || look || devices ? { dock: home || DEFAULTS, look: { layout: 'duo', ...look }, devices } : null;
-  await page.addInitScript(installTv, { key: KEY, value, more, missing, hidden, noAudio });
+  // The clock first, so that the count of frames in installTv sees what the app asks of it.
   if (clock) await page.clock.install();
+  await page.addInitScript(installTv, { key: KEY, value, more, missing, hidden, noAudio, noTv });
   if (time) await page.clock.setFixedTime(new Date(time));
-  await page.goto(preview.baseURL + '/home/');
-  await ready(page);
+  if (prepare) await prepare(page);
+  await page.goto(url, { waitUntil: wait ? 'load' : 'commit' });
+  if (wait) await ready(page);
   return page;
 }
 const ready = async page => {
@@ -109,6 +119,8 @@ const loaded = page => page.waitForFunction(() => ShoreQA.state().catalog.loaded
 const comeBack = async page => { await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await loaded(page); await settled(page); };
 const uninstall = (page, ...ids) => page.evaluate(list => { window.__tv.catalogue = window.__tv.catalogue.filter(a => !list.includes(a.id)); }, ids);
 const lines = (page, where) => page.evaluate(column => Array.prototype.filter.call(document.querySelectorAll('.duo-eline.is-' + column), () => true).sort((a, b) => window.Motion.valueOf(a).y - window.Motion.valueOf(b).y).map(el => el.querySelector('.duo-eline-name').textContent), where);
+const VOLUME = { up: 447, down: 448, mute: 449 };
+const volumeKey = (page, name) => page.evaluate(code => document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: code, bubbles: true })), VOLUME[name]);
 const logos = page => page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('.duo-card:not(.is-leaving) .duo-line img'), img => [img.getAttribute('src').split('/').pop(), img.naturalWidth > 0]));
 
 try {
@@ -135,6 +147,35 @@ try {
     check('starting up shows no message', await toast(page) === '', await toast(page));
     const clock = await page.evaluate(() => { const boxes = Array.prototype.map.call(document.querySelectorAll('#duoClock > div'), el => el.getBoundingClientRect()); return { left: Math.min(...boxes.map(b => b.left)), right: Math.max(...boxes.map(b => b.right)), top: boxes[0].top }; });
     check('the clock is centred', Math.abs((clock.left + clock.right) / 2 - 960) < 16, clock);
+    await page.context().close();
+  }
+
+  section = 'Arrival';
+  {
+    const opacity = page => page.evaluate(() => getComputedStyle(document.getElementById('duoHome')).opacity);
+    const arrived = page => page.waitForFunction(() => getComputedStyle(document.getElementById('duoHome')).opacity === '1');
+    const waiting = page => page.waitForFunction(() => document.getElementById('duoHome') && document.getElementById('duoHome').className.includes('is-arriving'));
+    let release;
+    const held = new Promise(done => { release = done; });
+    let page = await open({ wait: false, prepare: p => p.route('**/assets/duo/wall-*.webp', async route => { await held; await route.continue(); }) });
+    await waiting(page); await page.waitForTimeout(400);
+    check('nothing shows while the wallpaper is on its way', await opacity(page) === '0', await opacity(page));
+    release();
+    await arrived(page);
+    check('then the launcher arrives whole', await page.evaluate(() => document.getElementById('duoDayImg').naturalWidth > 0 && document.getElementById('duoHome').className === 'duo-home'));
+    await page.context().close();
+    page = await open({ prepare: p => p.route('**/assets/duo/glass/ring-*.webp', route => route.abort()) });
+    await arrived(page);
+    check('a missing image does not hold it', await opacity(page) === '1', await opacity(page));
+    await page.context().close();
+    page = await open({ wait: false, prepare: p => p.route('**/assets/duo/wall-night.webp', () => {}) });
+    await waiting(page); await page.waitForTimeout(3000);
+    check('nor does one that never comes', await opacity(page) === '1' && (await where(page)).focusCount === 1, await opacity(page));
+    await page.context().close();
+    page = await open({ look: { layout: 'dock' } });
+    check('Dock does not wait', await page.evaluate(() => !document.getElementById('duoHome').className.includes('is-arriving')));
+    await page.evaluate(() => ShoreQA.look({ layout: 'duo' })); await ready(page);
+    check('nor does a change of layout, with its card already on screen', await opacity(page) === '1', await opacity(page));
     await page.context().close();
   }
 
@@ -459,6 +500,18 @@ try {
     check('Back returns to All apps', (await where(page)).view === 'apps' && (await card(page)).title === 'Toutes les applis' && (await where(page)).focusAction === 'apps.editor', await where(page));
     await nav(page, 'down', 'ok'); await settled(page);
     check('OK launches the app', (await tv(page)).launched.length === 1, await tv(page));
+    await page.context().close();
+  }
+  {
+    const page = await open();
+    await loaded(page);
+    await page.evaluate(() => { window.__tv.noApps = true; });
+    await openFromHome(page, 'util.apps'); await rested(page);
+    const c = await card(page);
+    check('a failed read keeps a selection, on the way to try again', (await where(page)).focusAction === 'apps.retry' && (await where(page)).focusCount === 1, [c, await where(page)]);
+    await page.evaluate(() => { window.__tv.noApps = false; });
+    await nav(page, 'ok'); await loaded(page); await rested(page);
+    check('trying again finds the grid', (await where(page)).zone === 'grid' && (await where(page)).focusCount === 1 && (await page.evaluate(() => document.querySelectorAll('.duo-cell').length)) === 12, await where(page));
     await page.context().close();
   }
 
@@ -916,8 +969,6 @@ try {
   }
 
   section = 'Volume pill';
-  const VOLUME = { up: 447, down: 448, mute: 449 };
-  const volumeKey = (page, name) => page.evaluate(code => document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: code, bubbles: true })), VOLUME[name]);
   const pill = page => page.evaluate(() => ({ o: window.Motion.valueOf(document.getElementById('duoVol')).o, value: document.querySelector('.duo-vol-value').textContent, fill: window.Motion.valueOf(document.querySelector('.duo-vol-fill')).x, icon: document.querySelector('.duo-vol-icon svg').querySelectorAll('path').length }));
   {
     const page = await open();
@@ -1004,6 +1055,140 @@ try {
     await nav(page, 'ok'); await rested(page);
     check('Retour comes back to Home', (await where(page)).view === 'home' && (await where(page)).focusCount === 1, await where(page));
     await page.context().close();
+  }
+
+  section = 'Without a TV';
+  {
+    const page = await open({ noTv: true });
+    check('the layout opens all the same', (await state(page)).layout === 'duo' && (await where(page)).focusCount === 1, await where(page));
+    check('without a TV nothing takes the volume keys', await page.evaluate(() => getComputedStyle(document.getElementById('duoVol')).opacity) === '0');
+    await goTo(page, 'home.app.youtube');
+    await nav(page, 'ok'); await rested(page);
+    let c = await card(page);
+    check('OK on an app says what is missing', c.title === 'YouTube' && /sur la télé/.test(c.sub) && c.rows.join() === 'Retour' && (await where(page)).focusCount === 1, c);
+    await nav(page, 'ok'); await rested(page);
+    await openFromHome(page, 'util.apps'); await rested(page);
+    check('All apps offers to try again', (await where(page)).focusAction === 'apps.retry' && (await where(page)).focusCount === 1, await where(page));
+    await nav(page, 'back'); await rested(page);
+    await openFromHome(page, 'util.inputs'); await rested(page);
+    c = await card(page);
+    check('Inputs too', c.rows.join() === 'Réessayer' && /sur la télé/.test(c.sub) && (await where(page)).focusCount === 1, c);
+    await page.context().close();
+  }
+
+  section = 'At 720p';
+  {
+    /* The stage scales as one piece, so every box must be two thirds of its size at 1080p. */
+    const boxes = (page, list) => page.evaluate(selectors => Object.fromEntries(selectors.map(selector => {
+      const cards = Array.prototype.filter.call(document.querySelectorAll(selector), el => getComputedStyle(el).display !== 'none'), r = cards[cards.length - 1].getBoundingClientRect();
+      return [selector, [r.left, r.top, r.right, r.bottom]];
+    })), list);
+    const large = await open({ look: { scheme: 'day' } }), small = await open({ look: { scheme: 'day' }, viewport: { width: 1280, height: 720 } });
+    const both = async run => { await run(large); await run(small); };
+    const drift = async list => { const a = await boxes(large, list), b = await boxes(small, list); return list.filter(key => a[key].some((v, i) => Math.abs(v * 2 / 3 - b[key][i]) > 1)).map(key => [key, a[key], b[key]]); };
+    await both(async page => { await goTo(page, 'home.app.disneyplus'); await rested(page); });
+    let off = await drift(['#duoDayImg', '#duoClock', '#duoDate', '#duoRing', '#duoCapApps img', '#duoCapCtrl img', '#duoLens', '.duo-app.is-focus', '#duoPill']);
+    check('Home keeps its proportions and its glass stays aligned', off.length === 0, off);
+    await both(async page => { await volumeKey(page, 'up'); await rested(page); });
+    off = await drift(['#duoVol', '#duoVol img', '.duo-vol-track', '.duo-vol-value']);
+    check('so does the volume pill', off.length === 0, off);
+    await both(async page => { await goTo(page, 'util.settings'); await nav(page, 'ok', 'down', 'down', 'ok'); await rested(page); });
+    off = await drift(['.duo-card', '.duo-card-field', '.duo-plate', '.duo-line.is-focus']);
+    check('so does a card and its frost', off.length === 0, off);
+    await both(async page => { await nav(page, 'back', 'back'); await rested(page); await openFromHome(page, 'util.apps'); await loaded(page); await rested(page); });
+    off = await drift(['.duo-card', '.duo-card-field', '.duo-grid-lens', '.duo-cell.is-focus']);
+    check('so does the grid and its lens', off.length === 0, off);
+    check('there is still one selection', (await where(small)).focusCount === 1, await where(small));
+    await large.context().close(); await small.context().close();
+  }
+
+  section = 'Nothing runs at rest';
+  {
+    const page = await open({ clock: true });
+    /* Long enough for the last spring to end. The clock is faked, so this waits in real time. */
+    const quiet = async name => {
+      await page.waitForFunction(() => document.getAnimations().length === 0, null, { timeout: 5000 }).catch(() => {});
+      check(name + ': no animation is left', await page.evaluate(() => document.getAnimations().length) === 0, await page.evaluate(() => document.getAnimations().map(a => [a.effect.target && (a.effect.target.id || a.effect.target.className), a.playState])));
+      const before = await page.evaluate(() => window.__frames);
+      await new Promise(done => setTimeout(done, 500));
+      check(name + ': no frame is asked for', await page.evaluate(() => window.__frames) === before, [before, await page.evaluate(() => window.__frames)]);
+    };
+    check('the frames are really counted', await page.evaluate(() => { const before = window.__frames; requestAnimationFrame(() => {}); return window.__frames - before; }) === 1);
+    await quiet('after starting');
+    await page.keyboard.press('ArrowRight');
+    await quiet('after a key');
+    await page.clock.fastForward(21000);
+    check('the row has stepped aside', (await state(page)).duo.idle === true);
+    await quiet('with the row aside');
+    await page.clock.fastForward(120000);
+    await quiet('after the minute changes');
+    await page.keyboard.press('ArrowRight');
+    await quiet('after waking');
+    await openFromHome(page, 'util.settings');
+    await quiet('with a card open');
+    await nav(page, 'back');
+    await quiet('after a card closes');
+    await volumeKey(page, 'up');
+    await page.clock.fastForward(2500);
+    await quiet('after the volume pill');
+    await page.context().close();
+  }
+
+  section = 'Memory';
+  {
+    const page = await open({ more: 30 });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Performance.enable');
+    const memory = async () => {
+      await cdp.send('HeapProfiler.collectGarbage');
+      const { metrics } = await cdp.send('Performance.getMetrics'), dom = await cdp.send('Memory.getDOMCounters');
+      return { heap: metrics.find(m => m.name === 'JSHeapUsedSize').value, nodes: dom.nodes, listeners: dom.jsEventListeners, images: await page.evaluate(() => document.images.length) };
+    };
+    const round = async () => {
+      await goTo(page, 'util.settings'); await nav(page, 'ok', 'down', 'down', 'ok', 'down', 'down', 'ok'); await rested(page);
+      await nav(page, 'back', 'back', 'back'); await rested(page);
+      await openFromHome(page, 'util.apps'); await loaded(page); await nav(page, 'down', 'right'); await rested(page);
+      await nav(page, 'back'); await rested(page);
+      await openFromHome(page, 'util.inputs'); await rested(page);
+      await nav(page, 'back'); await rested(page);
+      await volumeKey(page, 'up'); await volumeKey(page, 'down');
+      await goTo(page, 'home.app.netflix'); await rested(page);
+    };
+    await round(); await round();
+    const before = await memory();
+    for (let i = 0; i < 5; i++) await round();
+    const after = await memory();
+    check('the cards leave nothing behind', after.nodes - before.nodes < 40 && after.images <= before.images && after.listeners - before.listeners < 10, [before, after]);
+    check('the heap does not grow by megabytes', after.heap - before.heap < 2 * 1024 * 1024, [before.heap, after.heap]);
+    console.log('Duo memory after five more rounds: ' + (after.nodes - before.nodes) + ' nodes, ' + Math.round((after.heap - before.heap) / 1024) + ' KB of heap');
+    await page.context().close();
+  }
+
+  /* The package itself, opened from its own files as on the TV: no server can hide a missing file. */
+  section = 'Packaged widget';
+  {
+    const folder = root + '.local/qa/widget/';
+    execFileSync('python3', ['-B', 'scripts/package.py', '--unsigned'], { cwd: root, stdio: 'ignore' });
+    rmSync(folder, { recursive: true, force: true });
+    mkdirSync(folder, { recursive: true });
+    execFileSync('python3', ['-I', '-c', 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])', root + 'dist/CleanFrame-unsigned.wgt', folder]);
+    const browser = await chromium.launch({ headless: true, channel: process.env.CLEANFRAME_BROWSER_CHANNEL || undefined, args: ['--allow-file-access-from-files'] });
+    try {
+      const page = await open({ browser, url: 'file://' + folder + 'index.html' });
+      const broken = () => page.evaluate(() => Array.prototype.filter.call(document.images, img => img.getAttribute('src') && !img.naturalWidth).map(img => img.getAttribute('src')));
+      check('it opens in Duo from its own files', (await state(page)).layout === 'duo' && await page.evaluate(() => location.protocol) === 'file:', (await state(page)).layout);
+      await page.waitForFunction(() => Sound.ready());
+      await page.keyboard.press('ArrowRight');
+      check('its sounds are there', (await page.evaluate(() => Sound.played.slice())).some(p => p.name === 'select' && p.method === 'web'));
+      await openFromHome(page, 'util.apps'); await loaded(page); await rested(page);
+      await nav(page, 'back'); await rested(page);
+      await openFromHome(page, 'util.inputs'); await rested(page);
+      await page.evaluate(() => ShoreQA.activate('inputs.devices')); await rested(page);
+      await page.evaluate(() => ShoreQA.activate('device.port.1')); await rested(page);
+      check('every image it asks for is inside', (await broken()).length === 0, await broken());
+      check('no file is missing', page.failed.length === 0, page.failed);
+      await page.context().close();
+    } finally { await browser.close(); }
   }
 
   section = 'Speed';

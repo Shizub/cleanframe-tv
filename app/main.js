@@ -526,7 +526,7 @@
     FrameDevice.apps(function (err, entries, installed) {
       if (request !== catalog.request) return;
       catalog.loading = false;
-      if (err) { catalog.error = err.message || 'Impossible de lire les applis installées.'; if (!catalog.loaded) ALPHA = []; render(); return; }
+      if (err) { catalog.error = err.message || 'Impossible de lire les applis installées.'; if (!catalog.loaded) ALPHA = []; norm(); render(); return; }
       oldFocus = top().id === 'apps' ? appsItems()[top().f.i] : null;
       ALPHA = [];
       entries.forEach(function (entry) {
@@ -1300,7 +1300,7 @@
   /* The glass is baked for each capsule size and each thing that moves is an image on its own layer:
      navigation only changes transform and opacity, and the day and night images only cross-fade. */
   var DUO_ROW = { pitch: 116, pad: 10, h: 136, gap: 28, y: 884 }, DUO_CENTER_Y = DUO_ROW.y + DUO_ROW.h / 2, DUO_CAP_TOP = 158, DUO_ICON = 106, DUO_REST = .877;
-  var DUO_VOL = { x: 80, y: 80, track: 228, shown: 2200 };
+  var DUO_VOL = { x: 80, y: 80, track: 228, shown: 2200 }, DUO_ARRIVAL_MS = 2500;
   var DUO_IDLE_MS = 20000, DUO_FADE_MS = 1200, DUO_FILES = 'assets/duo/', DUO_LENS = 164;
   var DUO_DAYS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'], DUO_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
   var duo = { built: false, rowKey: null, level: -1, scheme: 'day', focus: null, idle: false, idleTimer: 0, slots: [], apps: [], controls: [], text: null, tempEl: null, widths: {}, card: null, errShown: null, pendingShown: false, toastTimer: 0, connected: null, bumped: false, volume: null, volumeTimer: 0 };
@@ -1911,6 +1911,17 @@
     if (now !== t) return;
     after = duoPlace(now);
     if (after.id !== before.id) duoSound(after.zone === before.zone ? 'select' : 'switch', { x: after.x, note: after.note });
+  }
+
+  /* ---------- Arrival ---------- */
+  /* The launcher arrives in one piece: it waits for its images and its font, and a slow one never holds it for long. */
+  function duoArrive() {
+    var home = $('duoHome'), timer, waits = Array.prototype.map.call(home.querySelectorAll('img'), function (im) { return im.decode ? im.decode().catch(function () {}) : null; });
+    function show() { clearTimeout(timer); home.className = 'duo-home'; }
+    if (document.fonts) waits.push(document.fonts.load('600 42px "Duo Geist"').catch(function () {}));
+    home.className = 'duo-home is-arriving';
+    timer = setTimeout(show, DUO_ARRIVAL_MS);
+    Promise.all(waits).then(show);
   }
 
   /* ---------- Volume ---------- */
@@ -2749,6 +2760,7 @@
   initialise();
   setLook({}, { transient: true, startup: true });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); duoTouch();
+  if (S.c.layout === 'duo') duoArrive();
   if (!document.hidden) refreshCatalog();
   FrameDevice.watchSources(function () { if (!document.hidden && S.c.layout === 'duo') refreshSources(true); });
 })();
