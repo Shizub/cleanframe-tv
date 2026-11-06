@@ -437,7 +437,7 @@
     if (!u) { S.note = 'Rien à annuler'; return false; }
     if (!write(next(u.snap.home.slice(), u.snap.recent.slice()), 'Annuler : ' + u.label)) return false;
     S.undo.pop();
-    S.note = 'Annulé : ' + u.label + '.';
+    S.note = S.c.layout === 'duo' ? 'Annulé' : 'Annulé : ' + u.label + '.';
     return true;
   }
   function undoLabel() { var u = S.undo[S.undo.length - 1]; return u ? u.label : ''; }
