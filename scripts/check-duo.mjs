@@ -19,10 +19,11 @@ function check(name, ok, detail) {
 
 /* Runs in the page, before the app. The same public API shape as the real adapter expects. */
 function installTv(seed) {
-  if (seed && !localStorage.getItem(seed.key)) localStorage.setItem(seed.key, JSON.stringify(seed.value));
-  const tv = window.__tv = { launched: [], controls: [], sources: [] };
+  if (seed && seed.value && !localStorage.getItem(seed.key)) localStorage.setItem(seed.key, JSON.stringify(seed.value));
+  const tv = window.__tv = { launched: [], controls: [], sources: [], refuse: false, noSources: false };
   const catalogue = [['org.tizen.netflix-app', 'Netflix'], ['9Ur5IzDKqV.TizenYouTube', 'YouTube'], ['org.tizen.primevideo', 'Prime Video'], ['MCmYXNxgcu.DisneyPlus', 'Disney+'],
     ['com.samsung.tv.aria-video', 'Apple TV'], ['rJeHak5zRg.Spotify', 'Spotify'], ['Qa12345678.StreamA', 'Stream A'], ['Qa12345678.StreamB', 'Stream B'], ['Qa12345678.StreamC', 'Stream C']]
+    .concat(Array.from({ length: seed && seed.more || 0 }, (_, i) => ['Qa12345678.Extra' + (i + 10), 'Extra ' + (i + 10)]))
     .map(([id, name]) => ({ id, name, show: true, iconPath: '' }));
   const hdmi = [1, 2, 3].map(number => ({ type: 'HDMI', number }));
   window.tizen = {
@@ -31,16 +32,16 @@ function installTv(seed) {
     application: {
       getCurrentApplication: () => ({ appInfo: { id: 'nClrkHome1.FrameHome' } }),
       getAppsInfo(ok) { setTimeout(() => ok(catalogue), 0); },
-      launch(id, ok) { tv.launched.push(id); setTimeout(ok, 0); },
+      launch(id, ok, fail) { tv.launched.push(id); setTimeout(() => (tv.refuse ? fail({ message: 'La télé a refusé.' }) : ok()), 0); },
       launchAppControl(control, id, ok) { tv.controls.push({ id, data: control.data.map(item => item.key + '=' + item.value) }); setTimeout(ok, 0); }
     },
-    systeminfo: { getPropertyValue(name, ok) { setTimeout(() => ok({ connected: hdmi.slice(0, 2), disconnected: hdmi.slice(2) }), 0); } },
+    systeminfo: { getPropertyValue(name, ok, fail) { setTimeout(() => (tv.noSources ? fail({ message: 'Entrées illisibles.' }) : ok({ connected: hdmi.slice(0, 2), disconnected: hdmi.slice(2) })), 0); } },
     tvwindow: { getSource: () => hdmi[0], setSource(source, ok) { tv.sources.push(source.number); setTimeout(() => ok(source), 0); } }
   };
 }
 
 const preview = await openPreview({ duo: true });
-async function open({ home, look, time, clock } = {}) {
+async function open({ home, look, time, clock, more } = {}) {
   const context = await preview.browser.newContext({ viewport: { width: 1920, height: 1080 }, timezoneId: 'Europe/Paris' });
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
@@ -48,7 +49,7 @@ async function open({ home, look, time, clock } = {}) {
   page.on('response', response => { if (response.status() >= 400) check('no failed request', false, response.status() + ' ' + response.url()); });
   await page.route('https://api.open-meteo.com/**', route => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ current: { temperature_2m: 12.4, weather_code: 3 } }) }));
   const value = home || look ? { dock: home || DEFAULTS, look: { layout: 'duo', ...look } } : null;
-  await page.addInitScript(installTv, value ? { key: KEY, value } : null);
+  await page.addInitScript(installTv, value || more ? { key: KEY, value, more } : null);
   if (clock) await page.clock.install();
   if (time) await page.clock.setFixedTime(new Date(time));
   await page.goto(preview.baseURL + '/home/');
@@ -70,6 +71,17 @@ async function goTo(page, action) {
   check('reaches ' + action, (await where(page)).focusAction === action, await where(page));
 }
 async function openFromHome(page, action) { await goTo(page, action); await nav(page, 'ok'); await settled(page); }
+/* Long enough for a spring to end, even on a loaded machine. */
+const rested = page => page.waitForTimeout(900);
+const card = page => page.evaluate(() => {
+  const box = el => { if (!el) return null; const r = el.getBoundingClientRect(); return { l: Math.round(r.left), r: Math.round(r.right), t: Math.round(r.top), b: Math.round(r.bottom), w: Math.round(r.width), h: Math.round(r.height) }; };
+  const cards = Array.prototype.filter.call(document.querySelectorAll('.duo-card'), el => getComputedStyle(el).visibility !== 'hidden');
+  const el = cards[cards.length - 1], text = selector => { const found = el && el.querySelector(selector); return found ? found.textContent : null; };
+  return { count: cards.length, box: box(el), title: text('.duo-title'), sub: text('.duo-sub'), field: box(el && el.querySelector('.duo-card-field')), plate: box(el && el.querySelector('.duo-plate')), focus: box(el && el.querySelector('.is-focus')),
+    rows: el ? Array.prototype.map.call(el.querySelectorAll('.duo-line-name'), row => row.textContent) : [], checked: el ? Array.prototype.map.call(el.querySelectorAll('.duo-line.is-checked .duo-line-name'), row => row.textContent) : [] };
+});
+const value = (page, selector, key) => page.evaluate(([s, k]) => window.Motion.valueOf(document.querySelector(s))[k], [selector, key]);
+const toast = page => page.evaluate(() => document.getElementById('duoToast').textContent);
 
 try {
   section = 'First run';
@@ -92,6 +104,7 @@ try {
     check('the clock has four digits and a colon', shown.digits === 5, shown.digits);
     check('the weather reading reaches the ring', shown.temp === '12°', shown.temp);
     check('the selected name is shown', shown.pill === 'Netflix', shown.pill);
+    check('starting up shows no message', await toast(page) === '', await toast(page));
     const clock = await page.evaluate(() => { const boxes = Array.prototype.map.call(document.querySelectorAll('#duoClock > div'), el => el.getBoundingClientRect()); return { left: Math.min(...boxes.map(b => b.left)), right: Math.max(...boxes.map(b => b.right)), top: boxes[0].top }; });
     check('the clock is centred', Math.abs((clock.left + clock.right) / 2 - 960) < 16, clock);
     await page.context().close();
@@ -279,40 +292,242 @@ try {
     await page.context().close();
   }
 
-  section = 'Settings preview';
+  section = 'Panels';
   {
     const page = await open();
-    await goTo(page, 'util.settings');
-    await nav(page, 'ok', 'down', 'ok'); await settled(page);
-    check('Layout opens', (await where(page)).settingsGroup === 'layout', await where(page));
+    await openFromHome(page, 'util.settings'); await rested(page);
+    let c = await card(page);
+    check('Settings is one card', c.count === 1 && c.title === 'Réglages', c);
+    check('the card is centred', Math.abs((c.box.l + c.box.r) / 2 - 960) <= 1 && Math.abs((c.box.t + c.box.b) / 2 - 540) <= 1, c.box);
+    check('the frost lines up with the wallpaper', Math.abs(c.field.l) <= 1 && Math.abs(c.field.t) <= 1, c.field);
+    const around = await page.evaluate(() => ({
+      home: getComputedStyle(document.getElementById('home')).visibility,
+      scene: document.getElementById('scene').getBoundingClientRect().width,
+      wall: document.getElementById('duoDayImg').getBoundingClientRect().width,
+      sheet: document.getElementById('sheet').hidden, details: document.getElementById('appearance').hidden
+    }));
+    check('the wallpaper stays around the card', around.home === 'visible' && around.scene === 1920 && around.wall === 1920, around);
+    check('the old panels stay out of the way', around.sheet && around.details, around);
+    check('the clock and the row step aside', await value(page, '#duoFace', 'o') === 0);
     check('one selection stays active', (await where(page)).focusCount === 1, await where(page));
-    const scene = await page.evaluate(() => {
-      const box = el => { const r = el.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width }; };
-      return { scene: box(document.getElementById('scene')), date: box(document.getElementById('duoDate')), row: box(document.getElementById('duoCapCtrl')), focus: document.querySelectorAll('#duoItems .is-focus').length };
-    });
-    check('the preview is at 48 %', Math.abs(scene.scene.w - 1920 * .48) < 1, scene.scene);
-    check('the row fits in the preview', scene.row.r <= scene.scene.r + 1 && scene.row.l >= scene.scene.l, scene);
-    check('the preview does not take the focus', scene.focus === 0, scene.focus);
-    const choices = await page.evaluate(() => ShoreQA.actions());
-    check('the three layouts are offered', ['choice.layout.list', 'choice.layout.dock', 'choice.layout.duo'].every(a => choices.includes(a)), choices);
-    check('the single group repeats no title', await page.locator('.setting-label').count() === 0, await page.locator('.setting-label').allTextContents());
-    await page.evaluate(() => ShoreQA.activate('choice.layout.dock')); await ready(page);
-    check('Dock can still be chosen', (await state(page)).layout === 'dock', (await state(page)).layout);
-    check('its photo and glass are loaded', await page.evaluate(() => document.getElementById('photo').naturalWidth > 0 && document.getElementById('dock').getBoundingClientRect().width > 0));
-    await page.evaluate(() => ShoreQA.activate('choice.layout.list')); await ready(page);
-    check('List can still be chosen', (await state(page)).layout === 'list', (await state(page)).layout);
-    await page.evaluate(() => ShoreQA.activate('choice.layout.duo')); await ready(page);
-    check('Duo comes back', (await state(page)).layout === 'duo' && (await page.evaluate(() => getComputedStyle(document.getElementById('duoHome')).display)) === 'block');
+    check('Settings only lists what Duo uses', c.rows.join() === 'Apparence,Disposition,Applis de l’accueil,Samsung', c.rows);
+
+    await nav(page, 'down'); await rested(page);
+    c = await card(page);
+    check('the plate follows the selection', Math.abs((c.plate.t + c.plate.b) - (c.focus.t + c.focus.b)) <= 2 && (await where(page)).focusAction === 'settings.group.layout', c);
+    await nav(page, 'up'); await rested(page);
+    const atTop = (await card(page)).plate;
+    await page.keyboard.press('ArrowUp');
+    check('a press at the end of a list bounces', await value(page, '.duo-plate', 'y') !== atTop.t - (await card(page)).box.t, await value(page, '.duo-plate', 'y'));
+    await rested(page);
+    check('the bounce comes back', JSON.stringify((await card(page)).plate) === JSON.stringify(atTop), (await card(page)).plate);
+    for (let i = 0; i < 12; i++) { await page.keyboard.down('ArrowUp'); await page.waitForTimeout(33); }
+    await page.keyboard.up('ArrowUp'); await rested(page);
+    check('a held key leaves the plate in its place', JSON.stringify((await card(page)).plate) === JSON.stringify(atTop), (await card(page)).plate);
+
+    await page.evaluate(() => ShoreQA.look({ scheme: 'night' })); await rested(page);
+    await nav(page, 'ok'); await rested(page);
+    c = await card(page);
+    check('Apparence replaces Settings', c.count === 1 && c.title === 'Apparence' && (await where(page)).settingsGroup === 'scheme', c);
+    check('it says what Auto follows', /Paris/.test(c.sub), c.sub);
+    check('it marks the applied choice', c.checked.join() === 'Nuit' && (await where(page)).focusAction === 'choice.scheme.night', c);
+    await nav(page, 'up');
+    const during = await page.evaluate(() => ShoreQA.where().focusCount);
+    check('only one line is selected while the plate glides', during === 1, during);
+    await nav(page, 'ok'); await rested(page);
+    c = await card(page);
+    const frost = () => page.evaluate(() => document.querySelector('.duo-card-field').getAttribute('src'));
+    check('OK applies a choice without closing', c.title === 'Apparence' && c.checked.join() === 'Jour' && (await state(page)).scheme === 'day', c);
+    check('the card follows the sun', (await frost()).includes('frost-day') && await page.evaluate(() => document.getElementById('stage').className.includes('sch-day')), await frost());
+    await nav(page, 'back'); await rested(page);
+    c = await card(page);
+    check('Back returns to the same line', c.title === 'Réglages' && c.count === 1 && (await where(page)).focusAction === 'settings.group.scheme', c);
+    check('the line shows the new value', await page.evaluate(() => document.querySelector('.duo-line .duo-line-value').textContent) === 'Jour');
+    await nav(page, 'back'); await rested(page);
+    check('Back closes the card', (await page.evaluate(() => document.querySelectorAll('.duo-card').length)) === 0, await card(page));
+    await nav(page, 'ok');
+    check('a card that opens counts as the only selection', (await where(page)).focusCount === 1, await where(page));
+    await nav(page, 'back');
+    check('a card that closes no longer counts', (await where(page)).focusCount === 1 && (await where(page)).view === 'home', await where(page));
+    await rested(page);
+    check('the clock and the row come back', await value(page, '#duoFace', 'o') === 1);
+    check('Home keeps its selection', (await where(page)).focusAction === 'util.settings' && (await where(page)).focusCount === 1, await where(page));
     await page.context().close();
   }
   {
-    const page = await open({ home: DEFAULTS.concat(EXTRA) });
-    await goTo(page, 'util.settings');
-    await page.evaluate(() => { ShoreQA.activate('util.settings'); ShoreQA.activate('settings.editor'); });
-    await settled(page);
-    const rows = await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('.ed-home .er'), row => Math.round(row.getBoundingClientRect().top)));
-    check('the editor does not promise a scroll', await page.locator('.ed-order-break.is-on').count() === 0);
-    check('the editor keeps an even rhythm', rows.length === 9 && rows.every((top, i) => !i || top - rows[i - 1] === rows[1] - rows[0]), rows);
+    const page = await open();
+    await openFromHome(page, 'util.settings');
+    await nav(page, 'down', 'ok'); await rested(page);
+    let c = await card(page);
+    check('Layout is a plain list', c.title === 'Disposition' && c.rows.join() === 'Liste,Barre,Duo' && c.checked.join() === 'Duo', c);
+    const layouts = await page.evaluate(() => ShoreQA.actions());
+    check('it offers the three layouts', layouts.join() === 'choice.layout.list,choice.layout.dock,choice.layout.duo', layouts);
+    await nav(page, 'up', 'ok'); await ready(page);
+    check('Dock can still be chosen', (await state(page)).layout === 'dock', (await state(page)).layout);
+    const old = await page.evaluate(() => ({ cards: document.querySelectorAll('.duo-card').length, details: document.getElementById('appearance').hidden, scene: document.getElementById('scene').getBoundingClientRect().width, photo: document.getElementById('photo').naturalWidth, focus: ShoreQA.where().focusCount }));
+    check('Dock has its own panels back', old.cards === 0 && !old.details && Math.abs(old.scene - 1920 * .48) < 1 && old.photo > 0 && old.focus === 1, old);
+    await page.evaluate(() => ShoreQA.activate('choice.layout.list')); await ready(page);
+    check('List can still be chosen', (await state(page)).layout === 'list', (await state(page)).layout);
+    await page.evaluate(() => ShoreQA.activate('choice.layout.duo')); await ready(page); await rested(page);
+    c = await card(page);
+    const back = await page.evaluate(() => ({ details: document.getElementById('appearance').hidden, scene: document.getElementById('scene').getBoundingClientRect().width, home: getComputedStyle(document.getElementById('duoHome')).display, focus: ShoreQA.where().focusCount }));
+    check('Duo comes back as a card', (await state(page)).layout === 'duo' && c.count === 1 && c.title === 'Disposition' && back.details && back.scene === 1920 && back.home === 'block' && back.focus === 1, [c, back]);
+    await nav(page, 'back'); await rested(page);
+    check('Back finds Settings as a card', (await card(page)).title === 'Réglages' && (await card(page)).count === 1, await card(page));
+    await nav(page, 'back'); await rested(page);
+    check('Home is whole again', await value(page, '#duoFace', 'o') === 1 && (await where(page)).focusCount === 1 && (await page.evaluate(() => document.querySelectorAll('.duo-app').length)) === 6, await where(page));
+    await page.context().close();
+  }
+
+  section = 'Inputs card';
+  {
+    const page = await open();
+    await openFromHome(page, 'util.inputs'); await rested(page);
+    let c = await card(page);
+    check('the list lands on the active input', (await where(page)).focusAction === 'input.1' && c.rows.join() === 'HDMI 1,HDMI 2,HDMI 3' && c.checked.join() === 'HDMI 1', [await where(page), c]);
+    check('it says which are asleep', await page.evaluate(() => document.querySelectorAll('.duo-line')[2].className.includes('is-dim') && document.querySelectorAll('.duo-line')[2].querySelector('.duo-line-value').textContent.includes('veille')));
+    await nav(page, 'back'); await settled(page);
+    await page.evaluate(() => { window.__tv.noSources = true; });
+    await nav(page, 'ok'); await rested(page);
+    c = await card(page);
+    check('a refusal offers to try again', c.rows.join() === 'Réessayer' && (await where(page)).focusAction === 'inputs.retry' && c.sub.length > 0, [c, await where(page)]);
+    await page.evaluate(() => { window.__tv.noSources = false; });
+    await nav(page, 'ok'); await rested(page);
+    check('trying again finds the list', (await card(page)).rows.length === 3 && (await where(page)).focusAction === 'input.1', await card(page));
+    await page.context().close();
+  }
+
+  section = 'All apps card';
+  {
+    const page = await open({ more: 12 });
+    await openFromHome(page, 'util.apps');
+    await page.waitForFunction(() => ShoreQA.state().catalog.loaded); await rested(page);
+    const w = await where(page), c = await card(page);
+    check('the first opening lands on the grid', w.zone === 'grid' && w.focusAction === 'apps.open.' + (await state(page)).catalog.ids[0] && w.focusCount === 1, w);
+    check('the card has the size of the grid', c.box.w === 1560 && c.box.h === 900, c.box);
+    const grid = await page.evaluate(() => ({ cells: document.querySelectorAll('.duo-cell').length, badges: document.querySelectorAll('.duo-cell-badge').length, broken: Array.prototype.filter.call(document.querySelectorAll('.duo-cell img'), img => !img.naturalWidth).length, tiles: document.querySelectorAll('.duo-cell .duo-tile').length }));
+    check('every app has its cell', grid.cells === 21, grid);
+    check('a badge marks those on Home', grid.badges === 6, grid);
+    check('known apps have their icon, others their initials', grid.broken === 0 && grid.tiles === 15, grid);
+    const lens = () => page.evaluate(() => { const r = document.querySelector('.duo-grid-lens').getBoundingClientRect(), f = document.querySelector('.duo-cell.is-focus .duo-cell-tile').getBoundingClientRect(); return Math.abs(r.left + r.right - f.left - f.right) <= 2 && Math.abs(r.top + r.bottom - f.top - f.bottom) <= 2; });
+    check('the lens sits behind the selection', await lens());
+    await page.keyboard.press('ArrowLeft'); await rested(page);
+    check('Left at the edge keeps the selection', (await where(page)).focusAction === w.focusAction && await lens(), await where(page));
+    await nav(page, 'right', 'right'); await rested(page);
+    check('Right moves along the row', (await where(page)).focusAction === 'apps.open.' + (await state(page)).catalog.ids[2] && await lens(), await where(page));
+    await nav(page, 'down', 'down'); await rested(page);
+    check('the grid follows the selection down', await value(page, '.duo-grid', 'y') === -238 && await lens(), await value(page, '.duo-grid', 'y'));
+    const inside = await page.evaluate(() => { const f = document.querySelector('.duo-cell.is-focus').getBoundingClientRect(), v = document.querySelector('.duo-grid-window').getBoundingClientRect(); return f.top >= v.top && f.bottom <= v.bottom; });
+    check('the selection stays in the window', inside);
+    for (let i = 0; i < 5; i++) await nav(page, 'down');
+    await rested(page);
+    check('Down stops on the last app', (await where(page)).focusAction === 'apps.open.' + (await state(page)).catalog.ids[20] && await lens(), await where(page));
+    for (let i = 0; i < 6; i++) await nav(page, 'up');
+    await rested(page);
+    check('Up from the first row reaches the top button', (await where(page)).focusAction === 'apps.editor' && (await where(page)).focusCount === 1 && await value(page, '.duo-grid-lens', 'o') === 0, await where(page));
+    await nav(page, 'ok'); await rested(page);
+    check('it opens the editor', (await where(page)).view === 'editor' && (await card(page)).title === 'Applis de l’accueil' && (await card(page)).count === 1, await card(page));
+    await nav(page, 'back'); await rested(page);
+    check('Back returns to All apps', (await where(page)).view === 'apps' && (await card(page)).title === 'Toutes les applis' && (await where(page)).focusAction === 'apps.editor', await where(page));
+    await nav(page, 'down', 'ok'); await settled(page);
+    check('OK launches the app', (await tv(page)).launched.length === 1, await tv(page));
+    await page.context().close();
+  }
+
+  section = 'Editor card';
+  {
+    const page = await open();
+    const y = id => page.evaluate(line => { const list = Array.prototype.filter.call(document.querySelectorAll('.duo-eline'), el => el.querySelector('.duo-eline-name').textContent === line); return window.Motion.valueOf(list[0]).y; }, id);
+    const saved = () => page.evaluate(k => JSON.parse(localStorage.getItem(k)).dock, KEY);
+    await openFromHome(page, 'util.settings');
+    await nav(page, 'down', 'down', 'ok');
+    await page.waitForFunction(() => ShoreQA.state().catalog.loaded); await rested(page);
+    check('the editor is one card', (await card(page)).count === 1 && (await card(page)).title === 'Applis de l’accueil', await card(page));
+    check('it starts on the app selected on Home', (await where(page)).focusAction === 'editor.move.spotify' && (await where(page)).focusCount === 1, await where(page));
+    for (let i = 0; i < 5; i++) await nav(page, 'up');
+    check('Up walks to the first app', (await where(page)).focusAction === 'editor.move.netflix', await where(page));
+    const others = await page.evaluate(() => Array.prototype.filter.call(document.querySelectorAll('.duo-eline.is-other'), () => true).length);
+    check('the other apps are in their column', others === 3, others);
+    check('the lines keep an even rhythm', await y('YouTube') - await y('Netflix') === 76 && await y('Prime Video') - await y('YouTube') === 76);
+
+    await nav(page, 'ok', 'down', 'down');
+    check('OK picks an app up and the keys carry it', (await state(page)).draft && (await state(page)).draft.order.indexOf('netflix') === 2, (await state(page)).draft);
+    check('the hint says how', /OK pose/.test(await toast(page)), await toast(page));
+    check('nothing is saved while carrying', (await saved())[0] === 'netflix', await saved());
+    await nav(page, 'back'); await rested(page);
+    check('Back puts it back', (await state(page)).draft === null && (await state(page)).home[0] === 'netflix' && (await where(page)).view === 'editor' && await y('Netflix') === 12, [await y('Netflix'), await where(page)]);
+    await nav(page, 'ok', 'down', 'ok'); await rested(page);
+    check('OK places it and saves', (await saved()).slice(0, 2).join() === 'youtube,netflix' && await y('YouTube') === 12 && await y('Netflix') === 88, await saved());
+    check('the toast confirms it', await toast(page) === 'Ordre enregistré', await toast(page));
+    await nav(page, 'right');
+    check('Right reaches the remove button', (await where(page)).focusAction === 'editor.remove.netflix' && (await where(page)).focusCount === 1, await where(page));
+    await nav(page, 'ok'); await rested(page);
+    check('OK removes the app', !(await state(page)).home.includes('netflix') && (await saved()).length === 5, await saved());
+    check('the selection follows it to the other column', (await where(page)).focusAction === 'editor.add.netflix', await where(page));
+    check('the count follows', await page.evaluate(() => document.querySelector('.duo-count').textContent) === '5');
+    await nav(page, 'ok'); await rested(page);
+    check('OK puts it back in its place', (await state(page)).home[1] === 'netflix' && (await where(page)).focusAction === 'editor.remove.netflix', await state(page));
+    await nav(page, 'left');
+    for (let i = 0; i < 3; i++) await nav(page, 'up');
+    check('Up reaches the top buttons', (await where(page)).focusAction === 'editor.done', await where(page));
+    await nav(page, 'down');
+    check('Down returns to the column it came from', (await where(page)).focusAction === 'editor.move.youtube', await where(page));
+    await nav(page, 'up', 'left', 'ok'); await rested(page);
+    check('Undo reverses the last change', !(await state(page)).home.includes('netflix') && /Annulé/.test(await toast(page)), [await state(page), await toast(page)]);
+    await nav(page, 'right', 'ok'); await rested(page);
+    check('Terminé closes the editor', (await where(page)).view === 'settings' && (await card(page)).title === 'Réglages', await where(page));
+    await page.context().close();
+  }
+  {
+    const page = await open({ home: ['netflix'] });
+    await openFromHome(page, 'util.settings');
+    await nav(page, 'down', 'down', 'ok'); await rested(page);
+    await nav(page, 'right', 'ok'); await rested(page);
+    check('the last app stays', (await state(page)).home.join() === 'netflix' && /garder une appli/.test(await toast(page)), await toast(page));
+    await page.context().close();
+  }
+  {
+    const page = await open({ home: DEFAULTS.concat(EXTRA), more: 20 });
+    await openFromHome(page, 'util.settings');
+    await nav(page, 'down', 'down', 'ok');
+    await page.waitForFunction(() => ShoreQA.state().catalog.loaded); await rested(page);
+    const rows = await page.evaluate(() => Array.prototype.filter.call(document.querySelectorAll('.duo-eline.is-home'), () => true).map(el => window.Motion.valueOf(el).y));
+    check('nine apps fit without a scroll hint', rows.length === 9 && rows.every((top, i) => !i || top - rows[i - 1] === 76) && rows[8] + 72 <= 704, rows);
+    await nav(page, 'right', 'right');
+    check('the other column is reached', (await where(page)).focusAction.startsWith('editor.add.'), await where(page));
+    await nav(page, 'ok');
+    check('a tenth app is refused', (await state(page)).home.length === 9 && /neuf applis/.test(await toast(page)), await toast(page));
+    for (let i = 0; i < 15; i++) await nav(page, 'down');
+    await rested(page);
+    const seen = await page.evaluate(() => { const f = document.querySelector('.is-focus').getBoundingClientRect(), v = document.querySelector('.duo-editor-window').getBoundingClientRect(); return f.top >= v.top && f.bottom <= v.bottom; });
+    check('a long list follows the selection', seen);
+    await nav(page, 'left');
+    const home = await page.evaluate(() => window.Motion.valueOf(document.querySelector('.duo-edot')).o);
+    check('Left comes back to a remove button on screen', (await where(page)).focusAction.startsWith('editor.remove.') && home === 1, await where(page));
+    await page.context().close();
+  }
+
+  section = 'Messages';
+  {
+    const page = await open();
+    await page.keyboard.press('Escape'); await rested(page);
+    let c = await card(page);
+    check('Back on Home asks first', c.title === 'Quitter l’accueil ?' && c.rows.join() === 'Rester ici,Menu Samsung' && (await where(page)).focusAction === 'message.stay', c);
+    check('it speaks of the Samsung menu', /menu Samsung/.test(c.sub), c.sub);
+    await nav(page, 'right');
+    check('Left and Right do nothing in a list', (await where(page)).focusAction === 'message.stay', await where(page));
+    await nav(page, 'down', 'ok'); await settled(page);
+    check('Menu Samsung opens the original Home', (await tv(page)).launched.includes('com.samsung.tv.csfs'), await tv(page));
+    await page.waitForTimeout(100);
+    check('and the card goes', (await where(page)).view === 'home', await where(page));
+    await rested(page);
+    await page.evaluate(() => { window.__tv.refuse = true; });
+    await goTo(page, 'home.app.youtube');
+    await nav(page, 'ok'); await rested(page);
+    c = await card(page);
+    check('a refusal says so in a card', c.title === 'YouTube' && /refusé/.test(c.sub) && c.rows.join() === 'Retour', c);
+    await nav(page, 'ok'); await rested(page);
+    check('Retour comes back to Home', (await where(page)).view === 'home' && (await where(page)).focusCount === 1, await where(page));
     await page.context().close();
   }
 
@@ -336,6 +551,39 @@ try {
     const p95 = times[Math.floor(times.length * .95)];
     check('a key costs little, even at a quarter of the speed', p95 < 20, p95);
     console.log('Duo key p95 at 4x slowdown: ' + p95.toFixed(1) + ' ms');
+    await page.context().close();
+  }
+  {
+    const page = await open({ more: 30 });
+    const cdp = await page.context().newCDPSession(page);
+    const measure = (keys, count = 44) => page.evaluate(async ([list, total]) => {
+      const out = [];
+      for (let i = 0; i < total; i++) {
+        const key = new KeyboardEvent('keydown', { keyCode: list[Math.floor(i / 11) % list.length], bubbles: true });
+        const start = performance.now();
+        document.dispatchEvent(key);
+        out.push(performance.now() - start);
+        await new Promise(resolve => setTimeout(resolve, 30));
+      }
+      return out.sort((a, b) => a - b)[Math.floor(total * .95)];
+    }, [keys, count]);
+    await openFromHome(page, 'util.settings'); await rested(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const list = await measure([40, 38]);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    await nav(page, 'back'); await openFromHome(page, 'util.apps');
+    await page.waitForFunction(() => ShoreQA.state().catalog.loaded); await rested(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const grid = await measure([40, 39, 38, 37]);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    await nav(page, 'up', 'up', 'up', 'up', 'up', 'up', 'ok');
+    await page.waitForFunction(() => ShoreQA.state().view === 'editor' && !ShoreQA.state().catalog.loading); await rested(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const editor = await measure([40, 38]);
+    check('a key in a list costs little', list < 20, list);
+    check('a key in the grid costs little', grid < 20, grid);
+    check('a key in the editor costs little', editor < 20, editor);
+    console.log('Panel key p95 at 4x slowdown: list ' + list.toFixed(1) + ', grid ' + grid.toFixed(1) + ', editor ' + editor.toFixed(1) + ' ms');
     await page.context().close();
   }
 } finally {

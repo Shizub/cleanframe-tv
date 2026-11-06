@@ -63,6 +63,42 @@ test('a move starts where the element is, ends on the target and settles', () =>
   assert.equal(M.valueOf(el).moving, false, 'nothing runs at rest');
 });
 
+test('the settling time is the last moment the motion can be seen', () => {
+  const { M } = engine();
+  for (const name of Object.keys(M.SPRINGS)) {
+    const spring = M.SPRINGS[name];
+    for (const [x0, v0] of [[116, 0], [-800, 0], [3, 400], [0, -900]]) {
+      const end = M.settle(spring, { x: { x0, v0 } });
+      let last = 0;
+      for (let t = 3; t > 0 && !last; t -= 1 / 240) { const st = M.state(spring, x0, v0, t); if (Math.abs(st.x) > .2 || Math.abs(st.v) > 1.6) last = t; }
+      assert.ok(Math.abs(end - last) <= 2 / 120, name + ' ' + x0 + ' ' + v0 + ': ' + end + ' against ' + last);
+    }
+  }
+});
+
+test('the keyframes follow the spring within a pixel or two', () => {
+  const { M } = engine();
+  for (const name of Object.keys(M.SPRINGS)) {
+    const el = element();
+    M.set(el, { x: 0 });
+    M.to(el, { x: 116 }, name);
+    const { frames, options } = el.played[0], seconds = options.duration / 1000;
+    assert.ok(frames.length <= 15, 'frames ' + frames.length);
+    assert.equal(frames[0].offset, 0);
+    assert.equal(frames[frames.length - 1].offset, 1);
+    frames.forEach((frame, i) => assert.ok(!i || frame.offset > frames[i - 1].offset, 'offsets rise'));
+    let worst = 0;
+    for (let t = 0; t <= seconds; t += 1 / 240) {
+      let i = 0;
+      while (i < frames.length - 2 && frames[i + 1].offset * seconds < t) i++;
+      const from = frames[i].offset * seconds, to = frames[i + 1].offset * seconds, u = (t - from) / (to - from);
+      const shown = xOf(frames[i].transform) + (xOf(frames[i + 1].transform) - xOf(frames[i].transform)) * u;
+      worst = Math.max(worst, Math.abs(shown - (116 + M.state(M.SPRINGS[name], -116, 0, t).x)));
+    }
+    assert.ok(worst < 2, name + ' strays by ' + worst);
+  }
+});
+
 test('changing target in mid-flight keeps the position and the speed', () => {
   const { M } = engine();
   const el = element();

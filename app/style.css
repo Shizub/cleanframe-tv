@@ -46,6 +46,84 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .sch-night .duo-pill-tint{background:rgba(255,255,255,.12)}
 .duo-pill-rim{border-radius:28px;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.30),inset 0 1px 0 rgba(255,255,255,.26)}
 .duo-pill-label{position:relative;display:inline-block;padding:0 28px;line-height:56px;font-size:30px;font-weight:600;letter-spacing:.002em}
+.duo-face{width:1920px;height:1080px}
+
+/* Duo panels: cards of frost over the wallpaper */
+.duo-panels,.duo-toast{display:none;font-family:'Duo Geist',Arial,sans-serif}
+.l-duo .duo-panels,.l-duo .duo-toast{display:block}
+.duo-panels{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;font-size:32px;line-height:1.2;pointer-events:none}
+.duo-card{clip-path:inset(0 round 56px);overflow:hidden;pointer-events:auto;transform-origin:50% 50%}
+.duo-card.is-leaving{pointer-events:none}
+.duo-card img{display:block;max-width:none}
+.duo-card-field{position:absolute;left:0;top:0;width:1920px;height:1080px}
+.duo-card-tint,.duo-card-rim,.duo-card-content{position:absolute;left:0;top:0;right:0;bottom:0}
+.duo-card-rim{border-radius:56px;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.34)}
+.duo-card-sheen{position:absolute;left:0;top:0;right:0;height:120px;background:linear-gradient(rgba(255,255,255,.20),rgba(255,255,255,0))}
+.sch-day .duo-card{color:#17171b}
+.sch-day .duo-card-tint{background:linear-gradient(rgba(255,255,255,.70),rgba(255,255,255,.60))}
+.sch-night .duo-card{color:#f6f6f8}
+.sch-night .duo-card-tint{background:linear-gradient(rgba(38,36,46,.56),rgba(20,20,28,.66))}
+.sch-night .duo-card-rim{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.20)}
+.sch-night .duo-card-sheen{background:linear-gradient(rgba(255,255,255,.10),rgba(255,255,255,0))}
+.duo-title{position:absolute;left:64px;top:52px;font-size:54px;line-height:64px;font-weight:650;letter-spacing:-.012em;white-space:nowrap}
+.duo-sub{position:absolute;left:66px;right:66px;top:118px;font-size:28px;line-height:36px;opacity:.62;white-space:pre-line}
+.duo-plate{height:92px;border-radius:30px;background:rgba(255,255,255,.94);box-shadow:inset 0 1px 0 #fff}
+.sch-day .duo-plate{background:rgba(255,255,255,.92)}
+.duo-line{position:absolute;left:48px;right:48px;height:92px;line-height:92px;font-size:36px;font-weight:500;white-space:nowrap;transition:color .12s linear}
+.duo-line-name{position:absolute;left:36px;top:0}
+.duo-line img{position:absolute;left:28px;top:20px;width:52px;height:52px}
+.duo-line.has-icon .duo-line-name{left:98px}
+.duo-line-value{position:absolute;right:78px;top:0;font-size:32px;font-weight:400;opacity:.58}
+.duo-card .duo-line .ico{position:absolute;right:30px;top:27px;width:38px;height:38px;stroke-width:2}
+.duo-tick{position:absolute;right:30px;top:27px;width:38px;height:38px;opacity:0;transform:scale(.5);transition:opacity .14s linear,transform .32s cubic-bezier(.3,1.5,.5,1)}
+.duo-card .duo-tick .ico{right:0;top:0}
+.duo-line.is-checked .duo-tick{opacity:1;transform:none}
+.duo-line.is-focus{color:#111114}
+.duo-line.is-focus .duo-line-value{opacity:.66}
+.duo-line.is-dim{opacity:.46}
+.duo-line.is-dim.is-focus{opacity:.72}
+.duo-top-bar{position:absolute;right:64px;top:50px;z-index:3;white-space:nowrap}
+.duo-top-button{position:relative;display:inline-block;height:72px;line-height:72px;padding:0 34px;margin-left:16px;font-size:30px;font-weight:550;border-radius:36px;transition:color .12s linear,opacity .2s linear}
+.duo-top-light{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:36px;background:#fff;opacity:0;transform:scale(.9);transition:opacity .14s linear,transform .32s cubic-bezier(.3,1.4,.5,1)}
+.duo-top-text{position:relative}
+.sch-day .duo-top-button{background:rgba(255,255,255,.34)}
+.sch-night .duo-top-button{background:rgba(255,255,255,.12)}
+.duo-top-button.is-focus{color:#111114}
+.duo-top-button.is-focus .duo-top-light{opacity:1;transform:none}
+.duo-top-button.is-dim{opacity:.42}
+.duo-status{position:absolute;left:64px;right:64px;top:400px;text-align:center;font-size:32px;line-height:44px;opacity:.72}
+.duo-grid-window{position:absolute;left:0;top:150px;right:0;bottom:0;overflow:hidden;clip-path:inset(0)}
+.duo-grid{width:1560px}
+.duo-grid-lens{width:168px;height:168px;border-radius:84px;background:rgba(255,255,255,.88);box-shadow:0 8px 26px rgba(0,0,0,.16)}
+.sch-day .duo-grid-lens{background:rgba(255,255,255,.92)}
+.duo-cell{position:absolute;width:284px;height:238px;text-align:center}
+.duo-cell-tile{position:relative;width:132px;height:132px;margin:22px auto 0}
+.duo-cell-tile>img{width:132px;height:132px}
+.duo-cell-tile .duo-tile{width:132px;height:132px;border-radius:66px;font-size:50px;line-height:132px}
+.duo-tile img{position:absolute;left:0;top:0;width:100%;height:100%}
+.duo-cell-name{display:block;margin-top:12px;padding:0 12px;font-size:28px;line-height:36px;font-weight:500;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .16s linear}
+.duo-cell.is-focus .duo-cell-name{opacity:1}
+.duo-cell-badge{position:absolute;left:188px;top:18px;width:40px;height:40px;border-radius:20px;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.28)}
+.duo-card .duo-cell-badge .ico{position:absolute;left:8px;top:8px;width:24px;height:24px;stroke:#111;stroke-width:2.4}
+.duo-column-title{position:absolute;top:128px;font-size:28px;line-height:36px;font-weight:600;opacity:.66;white-space:nowrap}
+.duo-count{display:inline-block}
+.duo-edit-status{position:absolute;left:804px;right:64px;top:176px;font-size:28px;line-height:36px;opacity:.66}
+.duo-editor-window{position:absolute;left:0;right:0;top:160px;bottom:36px;overflow:hidden;clip-path:inset(0);z-index:2}
+.duo-eplate{width:680px;height:72px;border-radius:36px;z-index:2}
+.duo-edot{width:60px;height:60px;border-radius:30px;z-index:2}
+.duo-lift{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:36px;box-shadow:0 8px 28px rgba(0,0,0,.24);opacity:0;transition:opacity .18s linear}
+.duo-eplate.is-picked .duo-lift{opacity:1}
+.duo-eline{width:680px;height:72px;line-height:72px;font-size:32px;font-weight:500;white-space:nowrap;transition:color .12s linear}
+.duo-eline-main{position:absolute;left:0;top:0;right:76px;height:72px}
+.duo-eline-main>img{position:absolute;left:14px;top:10px;width:52px;height:52px}
+.duo-eline-main .duo-tile{left:14px;top:10px;width:52px;height:52px;border-radius:26px;font-size:20px;line-height:52px}
+.duo-eline-name{position:absolute;left:84px;right:0;top:0;overflow:hidden;text-overflow:ellipsis}
+.duo-eline-rm{position:absolute;right:8px;top:6px;width:60px;height:60px;border-radius:30px;transition:color .12s linear,opacity .2s linear}
+.duo-eline.is-other .duo-eline-rm{opacity:0}
+.duo-card .duo-eline-rm .ico{position:absolute;left:14px;top:14px;width:32px;height:32px;stroke-width:2.2}
+.duo-eline.is-on{color:#111114}
+.duo-eline.is-remove .duo-eline-rm{color:#c9182b}
+.duo-toast{height:64px;line-height:64px;padding:0 34px;border-radius:32px;background:rgba(18,18,22,.72);color:#fff;font-size:30px;font-weight:500;white-space:nowrap;pointer-events:none;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.14)}
 
 /* ---------- Stage ---------- */
 .stage{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;transform-origin:0 0;background:#1d2a30;color:var(--ink);font-family:Manrope,Arial,sans-serif;font-size:32px;line-height:1.2;outline:0;-webkit-user-select:none;user-select:none;cursor:default}

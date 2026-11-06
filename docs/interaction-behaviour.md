@@ -26,6 +26,17 @@ Settings opens a grouped overview: Background, Layout, Typography, Focus, Apps o
 
 In Duo, Settings keeps Appearance (Auto, Day or Night), Layout, Apps on Home and Samsung. Background, Typography and Focus do not apply to this layout. Auto follows the sun at the configured weather place.
 
+### Duo panels
+
+Duo draws every panel as a card of frost over the wallpaper, in place of the screens described in this document. The clock and the row step aside while a card is open, and the wallpaper itself shows a change of day or night. There is no Home preview and no Back row: Back closes one card at a time.
+
+- Lists: Up/Down moves a plate along the lines and bounces once at each end. OK applies a choice and stays, with a checkmark on the applied one, or opens the next card.
+- All apps: five columns of colour icons, with a badge on those on Home. Up from the first row reaches Organise Home.
+- Apps on Home: each app keeps a line that glides between On Home and Not on Home. Right from a name reaches its remove button, then the other column. Recently removed apps come first in Not on Home, without their own heading. Down from the top buttons returns to the column they were reached from.
+- Back on Home: a card offers to stay or open the Samsung menu, as a list.
+- Inputs: the selection lands on the active input once the TV has listed them.
+- Short messages float above the card for two seconds: the order is saved, a change is undone, a limit is reached, or a save failed.
+
 Up/Down moves between rows. Left/Right moves between choices in a horizontal row. Focus alone changes neither the preview nor saved preferences in these appearance groups. Wallpaper has its own temporary photo preview, described below. OK applies the focused value. A checkmark identifies the applied value; the filled plate identifies remote focus. Applying the current value does not write again.
 
 Material applies to a photographic Dock, or Glass focus on a photographic List. Inactive material choices remain visible with an explanation and are skipped during navigation. Their stored value is retained. Wallpaper and rotation are also inactive on flat backgrounds.

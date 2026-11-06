@@ -25,15 +25,17 @@
         <div class="home" id="home">
           <div class="duo-home" id="duoHome">
             <img class="duo-fill" id="duoDayImg" alt=""><img class="duo-fill duo-night" id="duoNightImg" alt="">
-            <div class="duo-date" id="duoDate"></div>
-            <div class="duo-clock" id="duoClock" aria-hidden="true"></div>
-            <div class="duo-ring" id="duoRing" aria-hidden="true"></div>
-            <div class="duo-ring-ink" id="duoRingInk"></div>
-            <div class="duo-mover duo-row" id="duoRow">
-              <div class="duo-capsule" id="duoCapApps" aria-hidden="true"></div><div class="duo-capsule" id="duoCapCtrl" aria-hidden="true"></div>
-              <div class="duo-mover duo-lens" id="duoLens" aria-hidden="true"></div>
-              <div id="duoItems"></div>
-              <div class="duo-mover duo-pill" id="duoPill" aria-hidden="true"><img class="duo-mover duo-pill-field" id="duoPillField" alt=""><div class="duo-pill-tint"></div><div class="duo-pill-rim"></div><span class="duo-pill-label" id="duoPillLabel"></span></div>
+            <div class="duo-mover duo-face" id="duoFace">
+              <div class="duo-date" id="duoDate"></div>
+              <div class="duo-clock" id="duoClock" aria-hidden="true"></div>
+              <div class="duo-ring" id="duoRing" aria-hidden="true"></div>
+              <div class="duo-ring-ink" id="duoRingInk"></div>
+              <div class="duo-mover duo-row" id="duoRow">
+                <div class="duo-capsule" id="duoCapApps" aria-hidden="true"></div><div class="duo-capsule" id="duoCapCtrl" aria-hidden="true"></div>
+                <div class="duo-mover duo-lens" id="duoLens" aria-hidden="true"></div>
+                <div id="duoItems"></div>
+                <div class="duo-mover duo-pill" id="duoPill" aria-hidden="true"><img class="duo-mover duo-pill-field" id="duoPillField" alt=""><div class="duo-pill-tint"></div><div class="duo-pill-rim"></div><span class="duo-pill-label" id="duoPillLabel"></span></div>
+              </div>
             </div>
           </div>
           <div class="caption" id="caption"></div>
@@ -97,6 +99,8 @@
           <div class="sheet-veil" aria-hidden="true"></div>
           <div class="view" id="sheetView" role="dialog" aria-modal="true"></div>
         </div>
+        <div class="duo-panels" id="duoPanels"></div>
+        <div class="duo-mover duo-toast" id="duoToast" aria-live="polite"></div>
         <div class="focus-status" id="focusStatus" aria-live="polite"></div>
       </main>
 <script src="device.js"></script>

@@ -12,7 +12,8 @@
     panelOut: { d: 0.35, b: 0 },
     digit: { d: 0.45, b: 0 }
   };
-  var KEYS = 28;
+  /* A spring bends most at its start, so the keyframes crowd there: 14 follow it as closely as 28 evenly spaced ones. */
+  var KEYS = 14, CROWD = 1.6;
   var DEFAULTS = { x: 0, y: 0, s: 1, o: 1 };
   var EPS = { x: 0.2, y: 0.2, s: 0.0007, o: 0.003 };
   var jump = false;
@@ -37,8 +38,28 @@
     };
   }
 
+  /* After this time the spring's envelope is already below what the eye can see. */
+  function latest(spring, channel, name) {
+    var w0 = 2 * Math.PI / spring.d, zeta = 1 - spring.b, x0 = channel.x0, v0 = channel.v0, rate, ax, av, c, wd, b;
+    if (zeta >= 1) {
+      c = Math.abs(v0 + w0 * x0);
+      rate = w0 / 2;
+      ax = Math.abs(x0) + 2 * c / (Math.E * w0);
+      av = Math.abs(v0) + 2 * c / Math.E;
+    } else {
+      wd = w0 * Math.sqrt(1 - zeta * zeta);
+      rate = zeta * w0;
+      b = (v0 + zeta * w0 * x0) / wd;
+      c = (zeta * w0 * v0 + w0 * w0 * x0) / wd;
+      ax = Math.sqrt(x0 * x0 + b * b);
+      av = Math.sqrt(v0 * v0 + c * c);
+    }
+    return Math.max(0, Math.log(Math.max(ax / EPS[name], av / (EPS[name] * 8), 1)) / rate);
+  }
   function settle(spring, channels) {
-    var t, name, st, step = 1 / 120, end = 3;
+    var t, name, st, step = 1 / 120, end = 0;
+    for (name in channels) end = Math.max(end, latest(spring, channels[name], name));
+    end = Math.min(3, end + step);
     for (t = end; t > 0; t -= step) {
       for (name in channels) {
         st = state(spring, channels[name].x0, channels[name].v0, t);
@@ -98,10 +119,11 @@
     for (key in channels) if (Math.abs(channels[key].x0) > EPS[key] || Math.abs(channels[key].v0) > EPS[key]) active[key] = channels[key];
     var duration = settle(spring, active), frames = [], animateOpacity = 'o' in active, i, t, sample;
     for (i = 0; i <= KEYS; i++) {
-      t = duration * i / KEYS;
+      var offset = Math.pow(i / KEYS, CROWD);
+      t = duration * offset;
       sample = {};
       for (key in channels) sample[key] = channels[key].target + (i === KEYS || !active[key] ? 0 : state(spring, channels[key].x0, channels[key].v0, t).x);
-      var frame = { transform: css(sample) };
+      var frame = { offset: offset, transform: css(sample) };
       if (animateOpacity) frame.opacity = Math.max(0, Math.min(1, sample.o)).toFixed(3);
       frames.push(frame);
     }
