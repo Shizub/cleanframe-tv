@@ -4,6 +4,7 @@
 
 - Dock: Left/Right scrolls the apps without wrapping. Up enters the top-right controls, starting with Art Mode or the last selected control. Left/Right moves between Art Mode, Inputs, All apps, Samsung Home and Settings. Down or Back returns to the selected app. The clock is at the top left.
 - List: Up/Down scrolls the apps without wrapping. Right enters the bottom-right controls, aligned with the clock above. Up/Down moves between Art Mode, All apps and Settings. Left or Back returns to the selected app. The list fades at both ends as it scrolls.
+- Duo (personal builds with the private files): apps and the five controls form one row. Left/Right walks along it without wrapping and bounces once per press at each end; a held key does not repeat the bounce. Up and Down do nothing. Back opens the choice to stay or open Samsung Home. After 20 seconds on Home the row fades out, and the first key only brings it back.
 - OK opens the selected item. Focus alone never launches an app.
 - Icons-only apps and controls reveal their names when focused. App presentation and control presentation are independent.
 - Back from the app list or Dock opens a choice to stay or open Samsung Home.
@@ -22,6 +23,8 @@ Settings opens a grouped overview: Background, Layout, Typography, Focus, Apps o
 | Focus | Type or Glass; Soft, Frost or Clear tint material |
 | Apps on Home | Membership and arrangement editor |
 | Samsung | Samsung Home, TV settings and Inputs |
+
+In Duo, Settings keeps Appearance (Auto, Day or Night), Layout, Apps on Home and Samsung. Background, Typography and Focus do not apply to this layout. Auto follows the sun at the configured weather place.
 
 Up/Down moves between rows. Left/Right moves between choices in a horizontal row. Focus alone changes neither the preview nor saved preferences in these appearance groups. Wallpaper has its own temporary photo preview, described below. OK applies the focused value. A checkmark identifies the applied value; the filled plate identifies remote focus. Applying the current value does not write again.
 
@@ -91,7 +94,7 @@ The native Home operation and startup configuration from 19 October remain separ
 
 ## Clock and rendering
 
-Both layouts show the TV's local time in 24-hour format, without seconds. It updates at the minute boundary and on return to the launcher. No date or clock panel is shown.
+List and Dock show the TV's local time in 24-hour format, without seconds. It updates at the minute boundary and on return to the launcher. No date or clock panel is shown. Duo draws the time as images with a leading zero (`09:41`), under the French date, and its day and night images cross-fade with the sun, once a minute.
 
 Weather appears under the clock. `updateWeather` asks Open-Meteo for the configured `WEATHER_PLACE` every 30 minutes while the launcher is visible, and retries after 5 minutes on failure. It sends coordinates only and needs no key. A failure keeps the last reading, or shows nothing before the first one.
 

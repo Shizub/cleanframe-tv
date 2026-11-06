@@ -18,6 +18,35 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-a
 
 html,body{width:100%;height:100%;overflow:hidden;background:#000}
 
+/* ---------- Duo layout: images, transform and opacity only ---------- */
+@font-face{font-family:'Duo Geist';font-style:normal;font-weight:100 900;src:url('assets/fonts/geist/Geist-Variable.ttf') format('truetype');font-display:block}
+.duo-home{display:none;position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;color:#fff;font-family:'Duo Geist',Arial,sans-serif;font-size:32px;line-height:1.2}
+.l-duo .duo-home{display:block}
+.l-duo .bg,.l-duo .caption,.l-duo .utils,.l-duo .util-focus-label,.l-duo .app-focus-name,.l-duo .ut-lens,.l-duo .dock,.l-duo .cue,.l-duo .dock-action,.l-duo .ph-scene{display:none}
+.duo-home img{position:absolute;left:0;top:0;display:block;max-width:none}
+.duo-home .duo-fill{width:1920px;height:1080px}
+.duo-mover{position:absolute;left:0;top:0;will-change:transform,opacity}
+.duo-row{width:1920px;height:1080px}
+.duo-date{position:absolute;left:0;top:78px;width:1920px;text-align:center;font-size:42px;line-height:48px;font-weight:600;letter-spacing:.004em;text-shadow:0 1px 16px rgba(20,24,34,.20)}
+.duo-capsule{position:absolute}
+.duo-ring-ink{position:absolute;left:1736px;top:60px;width:104px;height:104px;text-align:center}
+.duo-arc{position:absolute;left:0;top:0;width:104px;height:104px}
+.duo-weather{position:absolute;left:39px;top:22px;width:26px;height:26px}
+.duo-temp{position:absolute;left:0;top:47px;width:104px;font-size:27px;line-height:30px;font-weight:600;letter-spacing:-.01em}
+.duo-lens{width:164px;height:164px}
+.duo-app,.duo-control{width:106px;height:106px}
+.duo-app>img{width:106px;height:106px}
+.duo-control>img{left:16px;top:16px;width:74px;height:74px}
+.duo-tile{position:absolute;left:0;top:0;width:106px;height:106px;border-radius:53px;overflow:hidden;background:rgba(255,255,255,.22);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.26);text-align:center;font-size:40px;line-height:106px;font-weight:600}
+.duo-home .duo-tile img{width:106px;height:106px}
+.duo-pill{height:56px;clip-path:inset(0 round 28px);white-space:nowrap}
+.duo-home .duo-pill-field{width:1920px;height:1080px}
+.duo-pill-tint,.duo-pill-rim{position:absolute;left:0;top:0;right:0;bottom:0}
+.sch-day .duo-pill-tint{background:rgba(58,46,30,.26)}
+.sch-night .duo-pill-tint{background:rgba(255,255,255,.12)}
+.duo-pill-rim{border-radius:28px;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.30),inset 0 1px 0 rgba(255,255,255,.26)}
+.duo-pill-label{position:relative;display:inline-block;padding:0 28px;line-height:56px;font-size:30px;font-weight:600;letter-spacing:.002em}
+
 /* ---------- Stage ---------- */
 .stage{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;transform-origin:0 0;background:#1d2a30;color:var(--ink);font-family:Manrope,Arial,sans-serif;font-size:32px;line-height:1.2;outline:0;-webkit-user-select:none;user-select:none;cursor:default}
 .stage [data-z]{cursor:pointer}

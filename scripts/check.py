@@ -46,8 +46,16 @@ for tag in ['content', 'icon']:
     node = manifest.find('w:' + tag, ns)
     assert node is not None and (app / node.get('src', '')).is_file(), 'Missing ' + tag + ' file'
 assert all((app / name).is_file() for name in ['main.js', 'style.css'])
-for reference in ['assets/wallpapers/catalog.js', 'assets/adaptive-ink.js', 'assets/font-catalog.js']:
+for reference in ['assets/wallpapers/catalog.js', 'assets/adaptive-ink.js', 'assets/font-catalog.js', 'assets/duo-catalog.js']:
     assert (app / reference).is_file(), 'Missing runtime catalogue: ' + reference
+# A public build must not name private files: the real Duo catalogue only exists in the build overlay.
+assert (app / 'assets/duo-catalog.js').read_text().strip() == 'window.CleanFrameDuo = null;', 'The Duo catalogue in app/ must stay empty'
+assert not (app / 'assets/duo').exists(), 'Duo wallpaper and glass must stay in .local/duo/'
+duo_clock = json.loads(re.sub(r'^window\.CleanFrameDuoClock = |;\s*$', '', (app / 'assets/duo-clock/clock.js').read_text()))
+assert set(duo_clock['glyphs']) == set('0123456789:'), 'The Duo clock needs every digit and the colon'
+for glyph in duo_clock['glyphs'].values():
+    for scheme in ['day', 'night']:
+        assert (app / ('assets/duo-clock/' + scheme + '/' + glyph['file'] + '.webp')).is_file(), 'Missing Duo digit: ' + scheme + '/' + glyph['file']
 for filename in ['index.html']:
     source = (app / filename).read_text()
     pattern = r'(?:src|href)=[\"\']([^\"\']+)' if filename.endswith('.html') else r'from\s+[\"\']([^\"\']+)'

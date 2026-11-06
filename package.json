@@ -5,7 +5,7 @@
   "description": "A personal, uncluttered home interface for Samsung The Frame.",
   "scripts": {
     "dev": "python3 scripts/preview.py",
-    "check": "npm run lint && python3 scripts/check.py && npm run check:device",
+    "check": "npm run lint && python3 scripts/check.py && npm run check:device && npm run check:motion",
     "package": "python3 scripts/package.py",
     "tv:info": "python3 scripts/tv.py info",
     "tv:install": "python3 scripts/tv.py install",
@@ -17,6 +17,8 @@
     "check:tools": "python3 -B scripts/test-tools.py",
     "lint": "eslint app",
     "check:device": "node --test scripts/test-device.mjs",
+    "check:motion": "node --test scripts/test-motion.mjs",
+    "check:duo": "node scripts/check-duo.mjs",
     "check:performance": "node scripts/check-performance.mjs"
   },
   "devDependencies": {

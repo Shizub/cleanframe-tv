@@ -21,6 +21,16 @@ All fields use the centred 1920 x 1080 crop. The small panel backdrop comes from
 
 `app/assets/wallpapers/catalog.js` stores names and surface parameters; `app/assets/adaptive-ink.js` stores offline colour choices. New photographs need a rendered review of their List, Dock, clock, controls and all three materials before their metadata is accepted. An average image colour alone does not establish readable text.
 
+## Duo clock
+
+`app/assets/duo-clock/` holds the eleven glyphs in their day and night colours, with their metrics in `clock.js`. `scripts/bake-clock.py` draws them without a font file:
+
+```sh
+python3 scripts/bake-clock.py
+```
+
+It needs NumPy and Pillow and writes to ignored `.local/materials/duo-clock/`. Review the output, then copy it into `app/assets/duo-clock/`. The Duo wallpaper and glass are private files that this repository neither contains nor generates.
+
 ## Icon metrics
 
 `node scripts/build-icon-metrics.mjs` measures the SVGs in an aspect-preserved 240px viewport, matching the CSS mask renderer. Output is ignored `.local/materials/metrics.js`; review before copying it into `app/assets/icons/metrics.js`. The TV reads these bounds and does not scan icon pixels.

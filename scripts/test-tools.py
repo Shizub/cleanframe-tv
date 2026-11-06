@@ -131,6 +131,33 @@ class ToolTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             write_widget_archive(output, root=self.root, include_private=False)
 
+    def test_duo_files_only_enter_a_personal_build(self):
+        (self.root / '.local/duo/glass').mkdir(parents=True)
+        (self.root / '.local/duo/icons').mkdir()
+        (self.root / '.local/duo/glass/manifest.json').write_text('{"ring": {"x": 1, "y": 2, "w": 3, "h": 4}}')
+        for name in ['wall-day.webp', 'glass/ring-day.webp', 'icons/netflix.webp']:
+            (self.root / '.local/duo' / name).write_bytes(b'synthetic image')
+        (self.root / '.local/duo/notes.txt').write_text('Not an image, so not part of the overlay')
+        (self.root / 'app/assets').mkdir()
+        (self.root / 'app/assets/duo-catalog.js').write_text('window.CleanFrameDuo = null;\n')
+        personal, public = self.root / 'personal.wgt', self.root / 'public.wgt'
+        write_widget_archive(personal, root=self.root, include_private=True)
+        write_widget_archive(public, root=self.root, include_private=False)
+        with zipfile.ZipFile(personal) as archive:
+            self.assertIn('assets/duo/glass/ring-day.webp', archive.namelist())
+            self.assertNotIn('assets/duo/notes.txt', archive.namelist())
+            catalogue = archive.read('assets/duo-catalog.js').decode()
+            self.assertEqual(archive.namelist().count('assets/duo-catalog.js'), 1)
+            self.assertEqual(json.loads(catalogue[len('window.CleanFrameDuo = '):].rstrip(';\n')), {'glass': {'ring': {'x': 1, 'y': 2, 'w': 3, 'h': 4}}, 'icons': ['netflix']})
+        with zipfile.ZipFile(public) as archive:
+            self.assertFalse(any(name.startswith('assets/duo/') for name in archive.namelist()))
+            self.assertEqual(archive.read('assets/duo-catalog.js'), b'window.CleanFrameDuo = null;\n')
+        # A copy inside app/ would reach a public build, so the archive refuses it.
+        (self.root / 'app/assets/duo').mkdir()
+        (self.root / 'app/assets/duo/wall-day.webp').write_bytes(b'synthetic image')
+        with self.assertRaises(ValueError):
+            write_widget_archive(public, root=self.root, include_private=False)
+
     def test_export_ignores_local_signing_config(self):
         output = self.root / 'public.wgt'
         write_widget_archive(output, root=self.root, include_private=False)

@@ -23,7 +23,9 @@
   ];
   var PRIMARY = PRIMARY_APPS.map(function (a) { return a.id; }), APPS = PRIMARY_APPS.slice(), ALPHA = [];
   var WEATHER_PLACE = { name: 'Paris', lat: 48.85, lon: 2.35 }, WEATHER_MS = 1800000, WEATHER_RETRY_MS = 300000;
-  var weather = { text: '', at: 0, loading: false };
+  var weather = { text: '', temp: null, at: 0, loading: false };
+  /* The Duo catalogue is empty unless the private overlay supplied its wallpaper and glass. */
+  var DUO = window.CleanFrameDuo || null, DUO_CLOCK = window.CleanFrameDuoClock, M = window.Motion;
   var WALLS = window.CleanFrameWallpapers || [{ id: 'misty', name: 'Côte brumeuse', tone: 'light', ut: { tr: 'mist', br: 'mist' }, frostVeil: .20 }];
   var ADAPTIVE_INK = window.CleanFrameAdaptiveInk || {};
   WALLS.forEach(function (w) { w.ut = w.ut || { tr: 'light', br: 'light' }; w.frostVeil = w.frostVeil || .12; });
@@ -43,9 +45,9 @@
     newsreader: { name: 'Newsreader', family: 'Study Newsreader', display: 400, ui: 400, clock: 400 }
   };
   var PRIVATE_FONTS = window.CleanFramePrivateFontIDs || [], fontMetrics = {}, unavailableFonts = {}, widthCache = {}, fontRevision = 0, fontsReady = false;
-  var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'] };
-  var LOOK_NAMES = { bg: 'Fond', layout: 'Disposition', apps: 'Applis', font: 'Police', controls: 'Commandes de l’accueil', focus: 'Sélection', material: 'Matière' };
-  var VALUE_NAMES = { dark: 'Sombre', light: 'Clair', photo: 'Photo', list: 'Liste', dock: 'Barre', type: 'Texte seul', glass: 'Verre', soft: 'Doux', frost: 'Givré', tint: 'Teinte claire', icons: 'Icônes', both: 'Icônes et texte', text: 'Texte' };
+  var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: DUO ? ['list', 'dock', 'duo'] : ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'], scheme: ['auto', 'day', 'night'] };
+  var LOOK_NAMES = { bg: 'Fond', layout: 'Disposition', apps: 'Applis', font: 'Police', controls: 'Commandes de l’accueil', focus: 'Sélection', material: 'Matière', scheme: 'Apparence' };
+  var VALUE_NAMES = { dark: 'Sombre', light: 'Clair', photo: 'Photo', list: 'Liste', dock: 'Barre', duo: 'Duo', type: 'Texte seul', glass: 'Verre', soft: 'Doux', frost: 'Givré', tint: 'Teinte claire', icons: 'Icônes', both: 'Icônes et texte', text: 'Texte', auto: 'Auto (suit le soleil)', day: 'Jour', night: 'Nuit' };
   var UTIL = { art: ['Mode Art', 'art'], inputs: ['Entrées', 'tv'], apps: ['Toutes les applis', 'apps'], samsung: ['Accueil Samsung', 'home'], arrange: ['Organiser', 'arrange'], settings: ['Réglages', 'settings'] };
   var MSG = {
     leave: { title: 'Quitter l’accueil ?', line: 'Ouvrir l’accueil Samsung ?', note: '', actions: [['stay', 'Rester'], ['samsung', 'Accueil Samsung']] }
@@ -65,6 +67,7 @@
     down: '<path d="m5 8.5 7 7 7-7"/>',
     updown: '<path d="m7.5 9.5 4.5-4.5 4.5 4.5M7.5 14.5l4.5 4.5 4.5-4.5"/>',
     tv: '<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8.5 20h7"/>',
+    cloud: '<path d="M7 18.5h9.5a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 6.6 9.4 4.6 4.6 0 0 0 7 18.5Z"/>',
     warn: '<path d="M12 4 2.8 19.5h18.4Z"/><path d="M12 10v4.5M12 17.3v.1"/>'
   };
 
@@ -84,8 +87,8 @@
     for (var i = 0; i < list.length; i++) if (list[i].toLowerCase() === v) return list[i];
     return fallback;
   }
-  function lookOf(c) { return { bg: c.bg, wall: c.wall, layout: c.layout, apps: c.apps, font: c.font, controls: c.controls, focus: c.focus, material: c.material }; }
-  function materialApplies(c) { c = c || S.c; return c.bg === 'photo' && (c.layout === 'dock' || c.focus === 'glass'); }
+  function lookOf(c) { return { bg: c.bg, wall: c.wall, layout: c.layout, apps: c.apps, font: c.font, controls: c.controls, focus: c.focus, material: c.material, scheme: c.scheme }; }
+  function materialApplies(c) { c = c || S.c; return c.layout !== 'duo' && c.bg === 'photo' && (c.layout === 'dock' || c.focus === 'glass'); }
 
   /* ---------- Helpers ---------- */
   function app(id) { for (var i = 0; i < APPS.length; i++) if (APPS[i].id === id) return APPS[i]; return null; }
@@ -339,8 +342,10 @@
     });
     if (!h.length) h = PRIMARY.slice();
     (Array.isArray(s.recent) ? s.recent : []).forEach(function (id) { if (safeId(id) && app(id) && h.indexOf(id) < 0 && recent.indexOf(id) < 0 && recent.length < 5) recent.push(id); });
+    // Duo is drawn on its own wallpaper, so it always counts as a photo background.
+    var layout = pick(modern.layout, LOOK_VALUES.layout, legacyList ? 'list' : DUO ? 'duo' : 'dock');
     return {
-      bg: pick(modern.bg, LOOK_VALUES.bg, legacyList ? 'dark' : 'photo'), layout: pick(modern.layout, LOOK_VALUES.layout, legacyList ? 'list' : 'dock'),
+      bg: layout === 'duo' ? 'photo' : pick(modern.bg, LOOK_VALUES.bg, legacyList ? 'dark' : 'photo'), layout: layout, scheme: pick(modern.scheme, LOOK_VALUES.scheme, 'auto'),
       apps: pick(modern.apps, LOOK_VALUES.apps, legacyList ? 'text' : 'both'), controls: pick(modern.controls, LOOK_VALUES.controls, 'both'),
       focus: pick(modern.focus, LOOK_VALUES.focus, legacyList ? 'type' : 'glass'), material: pick(modern.material, LOOK_VALUES.material, 'soft'),
       font: pick(modern.font, LOOK_VALUES.font, 'manrope'), wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
@@ -506,7 +511,7 @@
   function addAppsRoute() { openEditor('home'); }
   function openSettings() { push({ id: 'settings', f: { id: S.settingsFocus } }); }
   function openAppearance(group) {
-    var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus' }[group];
+    var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', scheme: 'scheme' }[group];
     var action = S.detailFocus[group] || (axis ? 'choice.' + axis + '.' + S.c[axis] : group === 'rotation' ? 'rotation.' + S.c.mode : 'samsung.home');
     push({ id: 'appearance', group: group, f: { action: action } });
   }
@@ -536,6 +541,7 @@
     key: function (t, k) {
       var f = t.f, h = S.c.home, U = utils(), x = axes(), i = ensureSel();
       if (S.c.layout === 'list') { listHomeKey(t, k, i, U); return; }
+      if (S.c.layout === 'duo') { duoHomeKey(t, k, i, U); return; }
       if (f.zone === 'util') {
         f.u = clamp(f.u, 0, U.length - 1);
         if (k === x.prev && f.u > 0) f.u--;
@@ -715,7 +721,7 @@
     return { recent: rec, rest: ALPHA.filter(function (id) { return !onHome(id) && rec.indexOf(id) < 0; }) };
   }
   function otherList() { var o = otherGroups(); return o.recent.concat(o.rest); }
-  function editorCut() { return 5; }
+  function editorCut() { return S.c.layout === 'duo' ? CAP : 5; }
   function editorHomeY(i) { return i * ED_ROW + (i >= editorCut() ? 24 : 0); }
   function editorOtherY(j) {
     var o = otherGroups();
@@ -817,6 +823,10 @@
   function mode() { for (var i = 0; i < MODES.length; i++) if (MODES[i].id === S.c.mode) return MODES[i]; return MODES[0]; }
   function settingsRows() {
     var n = S.c.home.length;
+    if (S.c.layout === 'duo') return [{ id: 'scheme', label: 'Apparence', value: VALUE_NAMES[S.c.scheme] },
+      { id: 'layout', label: 'Disposition', value: VALUE_NAMES[S.c.layout] },
+      { id: 'editor', label: 'Applis de l’accueil', value: n + (n === 1 ? ' appli' : ' applis') },
+      { id: 'samsung', label: 'Samsung', value: 'Accueil et réglages de la télé' }];
     return [{ id: 'background', label: 'Fond', value: S.c.bg === 'photo' ? wall(S.c.wall).name : VALUE_NAMES[S.c.bg] },
       { id: 'layout', label: 'Disposition', value: VALUE_NAMES[S.c.layout] },
       { id: 'typography', label: 'Typographie', value: FONTS[S.c.font].name },
@@ -842,7 +852,7 @@
     if (id === 'editor') openEditor('settings');
     else openAppearance(id);
   }
-  var DETAIL_NAMES = { background: 'Fond', layout: 'Disposition', typography: 'Typographie', focus: 'Sélection', rotation: 'Rotation', samsung: 'Samsung', inputs: 'Entrées' };
+  var DETAIL_NAMES = { background: 'Fond', layout: 'Disposition', typography: 'Typographie', focus: 'Sélection', rotation: 'Rotation', samsung: 'Samsung', inputs: 'Entrées', scheme: 'Apparence' };
   function choice(axis, value, disabled) {
     return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled,
       label: axis === 'font' ? FONTS[value].name : axis === 'mode' ? MODES.filter(function (m) { return m.id === value; })[0].name : value === 'both' ? 'Les deux' : VALUE_NAMES[value] };
@@ -859,11 +869,13 @@
       { id: 'wall', title: 'Fond d’écran', items: [{ action: 'background.wallpaper', label: wall(S.c.wall).name, thumbnail: true, disabled: flat }] },
       { id: 'rotation', title: 'Rotation', items: [{ action: 'background.rotation', label: mode().name, disabled: flat }], reason: flat ? 'Choisissez Photo pour utiliser le fond d’écran et la rotation.' : '' }
     ];
+    if (t.group === 'scheme') return [{ id: 'scheme', title: '', items: options('scheme', LOOK_VALUES.scheme), reason: 'Auto suit le soleil de ' + WEATHER_PLACE.name + '.' }];
     if (t.group === 'layout') return [
-      { id: 'layout', title: 'Disposition', horizontal: true, items: options('layout', ['list', 'dock']) },
+      { id: 'layout', title: S.c.layout === 'duo' ? '' : 'Disposition', horizontal: true, items: options('layout', LOOK_VALUES.layout) }
+    ].concat(S.c.layout === 'duo' ? [] : [
       { id: 'apps', title: 'Affichage des applis', horizontal: true, items: options('apps', ['text', 'icons', 'both']) },
       { id: 'controls', title: 'Commandes de l’accueil', horizontal: true, items: options('controls', ['text', 'icons', 'both']) }
-    ];
+    ]);
     if (t.group === 'typography') return [{ id: 'font', title: '', items: options('font', LOOK_VALUES.font) }];
     if (t.group === 'focus') return [
       { id: 'focus', title: 'Style de sélection', horizontal: true, items: options('focus', ['type', 'glass']) },
@@ -945,7 +957,7 @@
   V.appearance = {
     norm: function (t) {
       var rows = detailRows(t), exists = false, applied = null;
-      var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', rotation: 'mode' }[t.group];
+      var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', rotation: 'mode', scheme: 'scheme' }[t.group];
       rows.forEach(function (items) { items.forEach(function (item) {
         if (item.action === t.f.action) exists = true;
         if (item.axis === axis && item.value === S.c[axis]) applied = item;
@@ -991,6 +1003,7 @@
   function norm() { var t = top(), v = V[t.id]; if (v.norm) v.norm(t); }
   function press(k) {
     norm();
+    duoTouch();
     var t = top();
     V[t.id].key(t, k);
     norm();
@@ -1011,7 +1024,9 @@
   var utPlates = [$('utLens'), $('utLensAlt')], utFields = [$('utField'), $('utFieldAlt')], utPlateIndex = 0, utPlateKey = null;
   var photoMode = null, photoTransitionToken = 0;
   var sheetEl = $('sheet'), sheetView = $('sheetView');
-  var IMG = { photo: $('photo'), mat: $('matImg'), bg: $('sheetBg'), field: $('phFieldImg'), fieldAlt: $('phFieldImgAlt'), utility: $('utFieldImg'), utilityAlt: $('utFieldImgAlt') };
+  var duoHome = $('duoHome'), duoDate = $('duoDate'), duoClock = $('duoClock'), duoRing = $('duoRing'), duoRingInk = $('duoRingInk'), duoRow = $('duoRow'), duoCapApps = $('duoCapApps'), duoCapCtrl = $('duoCapCtrl');
+  var duoLens = $('duoLens'), duoItems = $('duoItems'), duoPill = $('duoPill'), duoPillField = $('duoPillField'), duoPillLabel = $('duoPillLabel');
+  var IMG = { photo: $('photo'), mat: $('matImg'), bg: $('sheetBg'), field: $('phFieldImg'), fieldAlt: $('phFieldImgAlt'), utility: $('utFieldImg'), utilityAlt: $('utFieldImgAlt'), duoDay: $('duoDayImg'), duoNight: $('duoNightImg') };
   var sheetKey = '', slotEls = {}, dockEdgeFrame = 0, dockEdgeUntil = 0, dockAnchorCenter = 960;
   var appliedPalette = null, appliedPhoto = null, appliedFont = null, appliedFontMetrics = null;
 
@@ -1043,7 +1058,8 @@
   function render() {
     var t = top(), sheet = !!V[t.id].sheet, shown = wall(S.shown ? S.shown.wall : S.c.wall), palette = ADAPTIVE_INK[shown.id];
     var adaptive = applyAdaptiveInk(palette), tr = adaptive && palette.tr ? palette.tr.pol : shown.ut.tr, br = adaptive && palette.br ? palette.br.pol : shown.ut.br;
-    stage.className = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '');
+    if (S.c.layout === 'duo') syncNight(duo.level < 0 ? 0 : DUO_FADE_MS);
+    stage.className = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + (S.c.layout === 'duo' ? ' sch-' + duo.scheme : '') + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '');
     if (!adaptive && shown.clockInk) stage.style.setProperty('--clock-ink', shown.clockInk);
     else stage.style.removeProperty('--clock-ink');
     if (!adaptive && shown.dockClockInk) stage.style.setProperty('--dock-clock-ink', shown.dockClockInk);
@@ -1073,6 +1089,7 @@
 
   function renderHome(t) {
     var hs = homeState(t);
+    if (S.c.layout === 'duo') { renderDuo(hs); return; }
     renderCaption(t, hs);
     renderUtils(hs);
     if (S.c.layout === 'list') renderList(hs);
@@ -1174,6 +1191,223 @@
     }
     appFocusName.style.left = x + 'px'; appFocusName.style.top = (y + fontShift('primary', S.c.layout === 'list' ? 40 : 36)) + 'px';
     appFocusName.className = 'app-focus-name is-on';
+  }
+
+  /* ---------- Duo layout ---------- */
+  /* The glass is baked for each capsule size and each thing that moves is an image on its own layer:
+     navigation only changes transform and opacity, and the day and night images only cross-fade. */
+  var DUO_ROW = { pitch: 116, pad: 10, h: 136, gap: 28, y: 884 }, DUO_CENTER_Y = DUO_ROW.y + DUO_ROW.h / 2, DUO_CAP_TOP = 158, DUO_ICON = 106, DUO_REST = .877;
+  var DUO_IDLE_MS = 20000, DUO_FADE_MS = 1200, DUO_FILES = 'assets/duo/', DUO_LENS = 164;
+  var DUO_DAYS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'], DUO_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  var duo = { built: false, rowKey: null, level: -1, scheme: 'day', focus: null, idle: false, idleTimer: 0, slots: [], apps: [], controls: [], text: null, tempEl: null, widths: {} };
+
+  /* Altitude of the sun in degrees, from the usual low-precision formulas. */
+  function sunAltitude(date, lat, lon) {
+    var rad = Math.PI / 180, d = date.getTime() / 86400000 + 2440587.5 - 2451545;
+    var m = rad * (357.5291 + 0.98560028 * d);
+    var l = m + rad * (1.9148 * Math.sin(m) + 0.02 * Math.sin(2 * m) + 0.0003 * Math.sin(3 * m)) + rad * 102.9372 + Math.PI;
+    var e = rad * 23.4397, phi = rad * lat;
+    var dec = Math.asin(Math.sin(e) * Math.sin(l));
+    var ra = Math.atan2(Math.sin(l) * Math.cos(e), Math.cos(l));
+    var h = rad * (280.16 + 360.9856235 * d) + rad * lon - ra;
+    return Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(h)) / rad;
+  }
+  function nightLevel() {
+    if (S.c.scheme === 'day') return 0;
+    if (S.c.scheme === 'night') return 1;
+    return clamp((2 - sunAltitude(new Date(), WEATHER_PLACE.lat, WEATHER_PLACE.lon)) / 10, 0, 1);
+  }
+  function duoFrost(name) { return DUO_FILES + 'frost-' + name + '.webp'; }
+  /* Dusk only changes the opacity of the night images, which sit above the day ones. */
+  function syncNight(ms) {
+    var level = nightLevel(), name = level >= .5 ? 'night' : 'day', list, i;
+    if (level !== duo.level) {
+      list = duoHome.querySelectorAll('.duo-night');
+      for (i = 0; i < list.length; i++) {
+        list[i].style.transition = ms ? 'opacity ' + ms + 'ms linear' : 'none';
+        list[i].style.opacity = level;
+      }
+      duo.level = level;
+    }
+    if (name !== duo.scheme || !duoPillField.getAttribute('src')) {
+      duo.scheme = name;
+      duoPillField.src = duoFrost(name);
+      if (IMG.bg._src && IMG.bg._src.indexOf(DUO_FILES) === 0) IMG.bg.src = IMG.bg._src = duoFrost(name);
+    }
+  }
+  function duoPair(file, style) {
+    return '<img alt="" src="' + file.replace('{s}', 'day') + '" style="' + style + '"><img class="duo-night" alt="" src="' + file.replace('{s}', 'night') + '" style="' + style + 'opacity:' + Math.max(0, duo.level) + '">';
+  }
+  function duoBuild() {
+    var box;
+    if (duo.built) return;
+    duo.built = true;
+    box = DUO.glass.ring;
+    duoRing.innerHTML = duoPair(DUO_FILES + 'glass/ring-{s}.webp', 'left:' + box.x + 'px;top:' + box.y + 'px;width:' + box.w + 'px;height:' + box.h + 'px;');
+    duoRingInk.innerHTML = '<svg class="duo-arc" viewBox="0 0 104 104" aria-hidden="true" fill="none" stroke="#fff" stroke-linecap="round"><path d="M19.1 71A38 38 0 1 1 84.9 71" stroke-width="4.4"/><g fill="#fff" stroke="none"><circle cx="33" cy="84.9" r="2.8"/><circle cx="45.4" cy="89.4" r="2.8"/><circle cx="58.6" cy="89.4" r="2.8"/><circle cx="71" cy="84.9" r="2.8"/></g></svg>'
+      + '<svg class="duo-weather" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round">' + SVG.cloud + '</svg><div class="duo-temp"></div>';
+    duo.tempEl = duoRingInk.querySelector('.duo-temp');
+    duoLens.innerHTML = duoPair(DUO_FILES + 'ui/lens-{s}.webp', 'width:' + DUO_LENS + 'px;height:' + DUO_LENS + 'px;');
+    M.set(duoRow, { y: 0, o: 1 });
+    // The names and the date are measured in this face, so measure again once it is here.
+    if (document.fonts && document.fonts.load) document.fonts.load('600 42px "Duo Geist"').then(function () { duo.widths = {}; if (S.c.layout === 'duo') render(); }, function () {});
+  }
+  function duoDigit(ch) {
+    var g = DUO_CLOCK.glyphs[ch], el = document.createElement('div');
+    el.className = 'duo-mover';
+    el.style.width = g.w + 'px'; el.style.height = g.h + 'px';
+    el.innerHTML = duoPair('assets/duo-clock/{s}/' + g.file + '.webp', 'width:' + g.w + 'px;height:' + g.h + 'px;');
+    return el;
+  }
+  function duoLeave(el, y) {
+    M.to(el, { y: y, o: 0 }, 'digit');
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 700);
+  }
+  function renderDuoClock(animate) {
+    var date = new Date(), h = date.getHours(), m = date.getMinutes(), text = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m, pen = 960, i, g, ch, x, y, slot, el;
+    if (text === duo.text) return;
+    duo.text = text;
+    for (i = 0; i < text.length; i++) { g = DUO_CLOCK.glyphs[text.charAt(i)]; pen -= (g.lsb + g.width + g.rsb) / 2; }
+    for (i = 0; i < text.length; i++) {
+      ch = text.charAt(i); g = DUO_CLOCK.glyphs[ch]; slot = duo.slots[i];
+      x = pen + g.lsb - g.origin; y = DUO_CAP_TOP - g.origin;
+      pen += g.lsb + g.width + g.rsb;
+      if (!slot || slot.ch !== ch) {
+        el = duoDigit(ch);
+        duoClock.appendChild(el);
+        if (animate && slot) {
+          M.set(el, { x: x, y: y + 26, o: 0 });
+          M.to(el, { x: x, y: y, o: 1 }, 'digit');
+          duoLeave(slot.el, y - 26);
+        } else {
+          M.set(el, { x: x, y: y, o: 1 });
+          if (slot) slot.el.parentNode.removeChild(slot.el);
+        }
+        duo.slots[i] = { ch: ch, el: el, x: x };
+      } else if (Math.abs(slot.x - x) > .01) {
+        if (animate) M.to(slot.el, { x: x }, 'digit'); else M.set(slot.el, { x: x });
+        slot.x = x;
+      }
+    }
+    duoDate.textContent = DUO_DAYS[date.getDay()] + ' ' + date.getDate() + ' ' + DUO_MONTHS[date.getMonth()];
+  }
+  function duoGeom(n) {
+    var apps = n * DUO_ROW.pitch + DUO_ROW.pad * 2, controls = utils().length * DUO_ROW.pitch + DUO_ROW.pad * 2, x = Math.round((1920 - (apps + DUO_ROW.gap + controls)) / 2);
+    return { apps: x, controls: x + apps + DUO_ROW.gap };
+  }
+  function duoSlot(area, i) {
+    return duoGeom(S.c.home.length)[area] + DUO_ROW.pad + DUO_ROW.pitch * i + DUO_ROW.pitch / 2;
+  }
+  function duoCapsule(el, id) {
+    var box = DUO.glass[id];
+    el.style.left = box.x + 'px'; el.style.top = box.y + 'px'; el.style.width = box.w + 'px'; el.style.height = box.h + 'px';
+    el.innerHTML = duoPair(DUO_FILES + 'glass/' + id + '-{s}.webp', 'width:' + box.w + 'px;height:' + box.h + 'px;');
+  }
+  /* A known service has a baked icon; another app keeps its own icon, or its initials. */
+  function duoIcon(a) {
+    var key = a.brand || a.id, words = a.name.split(/\s+/);
+    if (DUO.icons.indexOf(key) < 0) key = a.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (DUO.icons.indexOf(key) >= 0) return '<img alt="" src="' + DUO_FILES + 'icons/' + key + '.webp">';
+    return '<span class="duo-tile"><span>' + esc((words[0].charAt(0) + (words.length > 1 ? words[1].charAt(0) : '')).toUpperCase()) + '</span>'
+      + (a.icon ? '<img alt="" src="' + esc(a.icon) + '">' : '') + '</span>';
+  }
+  function duoItem(cls, z, i, action, name, html, area) {
+    var el = document.createElement('div');
+    el.className = 'duo-mover ' + cls;
+    el.setAttribute('aria-label', name);
+    attrs(el, z, i, action);
+    el.innerHTML = html;
+    Array.prototype.forEach.call(el.querySelectorAll('.duo-tile img'), function (img) { img.onerror = function () { img.style.display = 'none'; }; });
+    M.set(el, { x: duoSlot(area, i) - DUO_ICON / 2, y: DUO_CENTER_Y - DUO_ICON / 2, s: DUO_REST });
+    duoItems.appendChild(el);
+    return el;
+  }
+  function renderDuoRow() {
+    var n = S.c.home.length;
+    duo.rowKey = S.c.home.join(); duo.focus = null;
+    duoCapsule(duoCapApps, 'apps' + n);
+    duoCapsule(duoCapCtrl, 'ctrl' + n);
+    duoItems.innerHTML = '';
+    duo.apps = S.c.home.map(function (id, i) { return duoItem('duo-app', 'app', i, 'home.app.' + id, app(id).name, duoIcon(app(id)), 'apps'); });
+    duo.controls = utils().map(function (u, i) { return duoItem('duo-control', 'util', i, 'util.' + u, duoUtilName(u), '<img alt="" src="' + DUO_FILES + 'ui/glyph-' + u + '.webp">', 'controls'); });
+  }
+  function duoUtilName(u) { return u === 'samsung' ? 'Menu Samsung' : UTIL[u][0]; }
+  function duoSyncFocus(hs) {
+    var area = hs.zone === 'util' ? 'controls' : 'apps', index = area === 'apps' ? hs.i : clamp(hs.u, 0, utils().length - 1), target = duo[area][index], previous = duo.focus;
+    var cx = duoSlot(area, index), lens = { x: cx - DUO_LENS / 2, y: DUO_CENTER_Y - DUO_LENS / 2 }, animate = !!previous && previous !== target, name = target.getAttribute('aria-label'), width, left;
+    if (animate) { M.to(duoLens, lens, 'select'); M.to(previous, { s: DUO_REST }, 'blur'); M.to(target, { s: 1 }, 'focus'); }
+    else if (!previous) { M.set(duoLens, lens); M.set(target, { s: 1 }); }
+    duo.focus = target;
+    // Only one selection may be active: the Settings preview shows the row without taking the focus.
+    duo.apps.concat(duo.controls).forEach(function (el) {
+      var on = el === target && hs.zone !== 'preview';
+      if ((el.className.indexOf(' is-focus') >= 0) !== on) el.className = on ? el.className + ' is-focus' : el.className.replace(' is-focus', '');
+    });
+    duoPillLabel.textContent = name;
+    // Each name is measured once: reading a width on every key would force a layout on every key.
+    width = duo.widths[name] || (duo.widths[name] = duoPillLabel.offsetWidth);
+    duoPill.style.width = width + 'px';
+    left = clamp(Math.round(cx - width / 2), 80, 1840 - width);
+    if (animate) {
+      M.set(duoPillLabel, { o: 0 }); M.to(duoPillLabel, { o: 1 }, 'blur');
+      M.to(duoPill, { x: left, y: DUO_ROW.y - 68 }, 'select');
+      M.to(duoPillField, { x: -left, y: 68 - DUO_ROW.y }, 'select');
+    } else {
+      M.set(duoPill, { x: left, y: DUO_ROW.y - 68 });
+      M.set(duoPillField, { x: -left, y: 68 - DUO_ROW.y });
+    }
+  }
+  function renderDuo(hs) {
+    duoBuild();
+    if (duo.rowKey !== S.c.home.join()) renderDuoRow();
+    duoSyncFocus(hs);
+    renderDuoClock(duo.text !== null);
+    duo.tempEl.textContent = weather.temp === null ? '' : weather.temp + '°';
+  }
+  function setDuoIdle(value) {
+    if (duo.idle === value) return;
+    duo.idle = value;
+    if (value) M.to(duoRow, { y: 34, o: 0 }, 'panelOut');
+    else M.to(duoRow, { y: 0, o: 1 }, 'panelIn');
+  }
+  /* After 20 seconds on Home the row steps aside, and the screen is just the wallpaper and the clock. */
+  function duoTouch() {
+    clearTimeout(duo.idleTimer);
+    if (S.c.layout !== 'duo') return;
+    duo.idleTimer = setTimeout(function () { if (top().id === 'home' && !document.hidden) setDuoIdle(true); }, DUO_IDLE_MS);
+  }
+  /* One bounce per press: restarting it in flight would take the shifted position for the place of rest. */
+  function duoNudge(el, axis, amount) {
+    if (S.keyRepeat || el.nudging) return;
+    var base = M.valueOf(el)[axis], out = {}, back = {};
+    el.nudging = true;
+    out[axis] = base + amount; back[axis] = base;
+    M.to(el, out, 'press');
+    setTimeout(function () {
+      el.nudging = false;
+      // If the selection has moved on meanwhile, its new place wins.
+      if (M.valueOf(el)[axis] === out[axis]) M.to(el, back, 'select');
+    }, 80);
+  }
+  /* Apps and controls form one row: Left and Right walk along it, without wrapping. */
+  function duoHomeKey(t, k, i, U) {
+    var f = t.f, h = S.c.home, at, next;
+    if (duo.idle) { setDuoIdle(false); return; }
+    if (f.zone !== 'util') f.zone = 'apps';
+    at = f.zone === 'util' ? h.length + clamp(f.u, 0, U.length - 1) : Math.max(0, i);
+    if (k === 'left' || k === 'right') {
+      next = at + (k === 'left' ? -1 : 1);
+      if (next < 0 || next >= h.length + U.length) {
+        duoNudge(duoLens, 'x', k === 'left' ? -12 : 12);
+        duoNudge(f.zone === 'util' ? duo.controls[f.u] : duo.apps[i], 'x', k === 'left' ? -12 : 12);
+        return;
+      }
+      if (next < h.length) { f.zone = 'apps'; setSel(h[next]); }
+      else { f.zone = 'util'; f.u = next - h.length; S.lastUtil = f.u; }
+    } else if (k === 'ok') {
+      if (f.zone === 'util') { M.press(duo.controls[f.u], 1); S.lastUtil = f.u; utilAction(U[f.u]); }
+      else { M.press(duo.apps[i], 1); launch(S.sel); }
+    } else if (k === 'back') openMessage('leave');
   }
 
   function dockGeom(n) {
@@ -1490,12 +1724,13 @@
     if (isSettingsDetail(t)) { focusStatus.className = 'focus-status'; return; }
     var root = isSettingsDetail(top()) ? appearanceEl : sheetEl.hidden ? homeEl : sheetEl, active = root.querySelectorAll('.is-focus[data-action]'), target = null, text = S.err ? 'Non enregistré. OK pour réessayer.' : '', i, r, sr, scale, x, y, w, action, solid, photoRow = false, photoFree = false;
     Array.prototype.forEach.call(stage.querySelectorAll('.has-local-status'), function (el) { el.className = el.className.replace(/\s+has-local-status/g, ''); });
-    for (i = 0; i < active.length; i++) if (renderedAction(active[i])) { target = active[i]; break; }
     if (!text && t.id === 'arrange' && (t.f.zone === 'act' || t.f.zone === 'tiles')) {
       var slot = t.slots[t.f.i];
       if (slot && !slot.removed && t.f.zone === 'act' && S.c.home.length === 1) text = LAST;
     }
     if (!text && S.note === LAST && t.id === 'arrange') text = LAST;
+    // Checking what is rendered forces a layout, so only do it when there is a status to place.
+    if (text) for (i = 0; i < active.length; i++) if (renderedAction(active[i])) { target = active[i]; break; }
     if (!target || !text) { focusStatus.className = 'focus-status'; return; }
     if (target.parentNode === utilsEl && utilsEl.className.indexOf('is-icons') >= 0) { renderUtilFocusLabel(target); focusStatus.className = 'focus-status'; return; }
     // Photo action pills stay on one line; the header already carries this status.
@@ -1661,14 +1896,18 @@
     else { im.onload = ready; im.onerror = function () { finish(false); }; }
   }
   function swapImg(k, im) { var old = IMG[k]; if (old === im) return; im.style.cssText = old.style.cssText; if (old.id) im.id = old.id; old.parentNode.replaceChild(im, old); IMG[k] = im; }
-  function bundleKey(look) { return look.wall + '|' + look.material; }
+  function bundleKey(look) { return look.layout === 'duo' ? 'duo' : look.wall + '|' + look.material; }
   function loadBundle(look, token, done) {
-    var imgs = { photo: makeImg('photo', WP + look.wall + '.jpg'), bg: makeImg('sheet-bg', WP + look.wall + '-panel.jpg') }, keys, left, allOk = true;
-    imgs.mat = makeImg('mat-img', matSrc(look.wall, look.material));
-    imgs.field = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
-    imgs.fieldAlt = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
-    imgs.utility = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
-    imgs.utilityAlt = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
+    var imgs, keys, left, allOk = true;
+    if (look.layout === 'duo') imgs = { duoDay: makeImg('duo-fill', DUO_FILES + 'wall-day.webp'), duoNight: makeImg('duo-fill duo-night', DUO_FILES + 'wall-night.webp'), bg: makeImg('sheet-bg', duoFrost(nightLevel() >= .5 ? 'night' : 'day')) };
+    else {
+      imgs = { photo: makeImg('photo', WP + look.wall + '.jpg'), bg: makeImg('sheet-bg', WP + look.wall + '-panel.jpg') };
+      imgs.mat = makeImg('mat-img', matSrc(look.wall, look.material));
+      imgs.field = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
+      imgs.fieldAlt = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
+      imgs.utility = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
+      imgs.utilityAlt = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
+    }
     keys = Object.keys(imgs); left = keys.length;
     keys.forEach(function (k) { whenReady(imgs[k], function (ok) {
       allOk = allOk && ok;
@@ -1700,6 +1939,7 @@
   function setLook(patch, options) {
     var opts = options || {}, changes = cleanPatch(patch), target = lookOf(S.c), k, token, needs, needsFont, changed, loadedBundle = null, imageDone, fontDone, failed = false;
     for (k in changes) if (changes.hasOwnProperty(k)) target[k] = changes[k];
+    if (target.layout === 'duo') target.bg = 'photo';
     changed = Object.keys(target).some(function (key) { return target[key] !== S.c[key]; });
     cancelLook(); S.err = null; token = wallToken;
     function finish(bundle) {
@@ -1737,7 +1977,7 @@
       if (document.hidden) { finish(loadedBundle); return; }
       window.requestAnimationFrame(function () { if (!failed && token === wallToken) finish(loadedBundle); });
     }
-    needs = target.bg === 'photo' && S.bundleKey !== bundleKey(target) && (!S.shown || S.shown.bg !== 'photo' || target.wall !== S.c.wall || materialApplies(target));
+    needs = target.bg === 'photo' && S.bundleKey !== bundleKey(target) && (!S.shown || S.shown.bg !== 'photo' || target.wall !== S.c.wall || materialApplies(target) || target.layout === 'duo' || S.bundleKey === 'duo');
     needsFont = !fontMetrics[target.font]; imageDone = !needs; fontDone = !needsFont;
     if (!needs && !needsFont) { finish(null); return; }
     S.pending = { patch: changes, target: target, row: opts.row || (needsFont ? 'font' : S.appearanceFocus), transient: !!opts.transient, preview: false };
@@ -1775,7 +2015,7 @@
 
   /* ---------- Lifecycle and remote input ---------- */
   var clockTimer = 0, rotationTimer = 0, activeSince = 0, activeMs = 0, rotationKey = '';
-  function rotationActive() { return !document.hidden && top().id === 'home' && S.c.bg === 'photo' && !S.pending && mode().min > 0; }
+  function rotationActive() { return !document.hidden && top().id === 'home' && S.c.bg === 'photo' && S.c.layout !== 'duo' && !S.pending && mode().min > 0; }
   function pauseRotation() {
     if (activeSince) { activeMs += Date.now() - activeSince; activeSince = 0; }
     clearTimeout(rotationTimer); rotationTimer = 0;
@@ -1819,7 +2059,8 @@
       try { now = JSON.parse(xhr.responseText).current; } catch (e) { now = null; }
       if (xhr.status !== 200 || !now || typeof now.temperature_2m !== 'number') { settle(WEATHER_RETRY_MS); return; }
       words = weatherWords(now.weather_code);
-      weather.text = WEATHER_PLACE.name + ' · ' + Math.round(now.temperature_2m) + '°' + (words ? ' · ' + words : '');
+      weather.temp = Math.round(now.temperature_2m);
+      weather.text = WEATHER_PLACE.name + ' · ' + weather.temp + '°' + (words ? ' · ' + words : '');
       settle(WEATHER_MS);
       updateClock();
     };
@@ -1830,7 +2071,8 @@
     clearTimeout(clockTimer);
     if (document.hidden) return;
     updateWeather();
-    if (top().id === 'home' || isSettingsDetail(top())) renderCaption(top(), homeState(top()));
+    if (S.c.layout === 'duo') render();
+    else if (top().id === 'home' || isSettingsDetail(top())) renderCaption(top(), homeState(top()));
     clockTimer = setTimeout(updateClock, 60000 - (Date.now() % 60000) + 30);
   }
   function focusStage() { try { stage.focus({ preventScroll: true }); } catch (e) { stage.focus(); } }
@@ -1906,7 +2148,9 @@
     if (!k || ev.metaKey || ev.ctrlKey || ev.altKey) return;
     ev.preventDefault();
     if (k === 'ok' || k === 'back') { if (ev.repeat || heldKeys[code]) return; heldKeys[code] = true; }
+    S.keyRepeat = !!ev.repeat;
     press(k);
+    S.keyRepeat = false;
   });
   document.addEventListener('keyup', function (ev) { delete heldKeys[ev.keyCode]; });
   window.addEventListener('blur', function () { heldKeys = {}; });
@@ -1917,6 +2161,7 @@
     else {
       release();
       if (S.c.bg === 'photo' && !S.pending && !S.previewBundle && (!committedBundle || S.bundleKey !== bundleKey(S.c))) setLook({}, { transient: true, startup: true });
+      setDuoIdle(false); duoTouch();
       refreshInputsOnReturn(); after(); updateClock(); focusStage();
     }
   });
@@ -1926,6 +2171,7 @@
   var NAV = { left: 'left', right: 'right', up: 'up', down: 'down', ok: 'ok', enter: 'ok', back: 'back', escape: 'back' };
   QA.state = function () {
     var out = serialise(S.c), t = top(), item = t.id === 'appearance' ? detailLocation(t).item : null;
+    out.duo = S.c.layout === 'duo' ? { level: duo.level, scheme: duo.scheme, idle: duo.idle, clock: duo.text } : null;
     out.committed = S.c; out.shown = S.shown; out.pending = S.pending; out.view = t.id; out.selected = S.sel;
     out.focusAction = focusedAction(); out.writes = S.writes; out.failedWrites = S.failed; out.error = S.err;
     out.catalog = { loading: catalog.loading, loaded: catalog.loaded, error: catalog.error, ids: ALPHA.slice() };
@@ -1945,6 +2191,7 @@
     Array.prototype.forEach.call(active, function (el) { if (renderedAction(el)) { count++; if (el.getAttribute('data-action') === action) name = el.getAttribute('aria-label') || el.textContent.replace(/\s+/g, ' ').trim(); } });
     return { view: top().id, settingsGroup: top().id === 'wallpaper' ? 'wallpaper' : top().id === 'appearance' ? top().group : null, focus: name, focusAction: action, focusCount: count, wallpaper: S.wallShown, zone: top().f.zone || null };
   };
+  QA.sunAltitude = sunAltitude;
   QA.ready = function () { return fontsReady && !S.pending && !!S.shown && S.shown.bg === S.c.bg && S.shown.wall === S.c.wall && S.shown.font === S.c.font; };
   QA.nav = function () { var keys = arguments.length === 1 && Array.isArray(arguments[0]) ? arguments[0] : Array.prototype.slice.call(arguments); keys.forEach(function (key) { if (!NAV[key]) throw new Error('Unknown key'); press(NAV[key]); }); return QA.state(); };
   QA.look = function (patch) { setLook(patch, {}); return QA.state(); };
@@ -1954,7 +2201,8 @@
 
   /* ---------- Start ---------- */
   cueL.innerHTML = icon('left'); cueR.innerHTML = icon('right');
+  M.setJump(REDUCED_MOTION);
   initialise();
   setLook({}, { transient: true, startup: true });
-  norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
+  norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); duoTouch();
 })();

@@ -53,7 +53,7 @@ font_suffixes = {'.ttf', '.otf', '.woff', '.woff2', '.eot'}
 
 def forbidden(name):
     path = Path(name)
-    return (name.startswith(('.local/', 'dist/', 'node_modules/', 'app/assets/private-fonts/',
+    return (name.startswith(('.local/', 'dist/', 'node_modules/', 'app/assets/private-fonts/', 'app/assets/duo/',
                                     'explorations/', 'docs/research/', 'docs/articles/'))
             or private_path(name) or path.suffix.lower() in {'.wgt', '.dll', '.pdb', '.exe'}
             or any(part.lower() in {'bin', 'obj'} for part in path.parts)

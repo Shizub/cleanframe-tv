@@ -41,8 +41,25 @@ def is_runtime_source(name):
     return not re.fullmatch(r'assets/wallpapers/[^/]+-glass-\d+\.png', name)
 
 
+def duo_overlay(root):
+    """The Duo layout's wallpaper and glass come from a private image, so they stay in .local/duo/."""
+    source = (root / '.local/duo').resolve()
+    try:
+        glass = json.loads((source / 'glass/manifest.json').read_text())
+    except (OSError, ValueError):
+        return {}
+    assets = {}
+    for path in sorted(source.rglob('*.webp')):
+        # Exclude symlinks that leave the private folder.
+        if path.resolve().is_relative_to(source) and path.is_file():
+            assets['assets/duo/' + path.relative_to(source).as_posix()] = path
+    catalog = {'glass': glass, 'icons': sorted(path.stem for path in source.glob('icons/*.webp'))}
+    assets['assets/duo-catalog.js'] = ('window.CleanFrameDuo = ' + json.dumps(catalog, separators=(',', ':')) + ';\n').encode()
+    return assets
+
+
 def font_overlay(root=ROOT, include_private=True):
-    """Return package-relative paths mapped to bytes or allowlisted font files."""
+    """Return package-relative paths mapped to bytes or allowlisted private files."""
     sources = (root / '.local/research/font-candidates').resolve()
     assets = {}
     private_ids = []
@@ -63,6 +80,9 @@ def font_overlay(root=ROOT, include_private=True):
     assets['assets/private-fonts.css'] = ('\n'.join(css) + '\n').encode()
     assets['assets/font-catalog.js'] = ('window.CleanFramePrivateFontIDs = '
                                        + json.dumps(private_ids + PUBLIC_FONT_IDS) + ';\n').encode()
+    assets['assets/duo-catalog.js'] = b'window.CleanFrameDuo = null;\n'
+    if include_private:
+        assets.update(duo_overlay(root))
     return assets
 
 
@@ -85,8 +105,8 @@ def write_widget_archive(output, root=ROOT, include_private=True, identity=None)
                 continue
             if private_path(name) or secret_content(source.read_bytes()):
                 raise ValueError('Private material in app source: ' + name)
-            if name.startswith('assets/private-fonts/'):
-                raise ValueError('Private font binaries must stay in .local/, not app/.')
+            if name.startswith(('assets/private-fonts/', 'assets/duo/')):
+                raise ValueError('Private font and Duo files must stay in .local/, not app/.')
             if name not in overlay and is_runtime_source(name):
                 package.write(source, name)
         for name, source in sorted(overlay.items()):

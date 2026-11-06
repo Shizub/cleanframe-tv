@@ -1,7 +1,7 @@
 // Bounded browser performance audit of production views. This is not a TV benchmark.
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { openPreview, root } from './browser.mjs';
+import { networkQuiet, openPreview, root } from './browser.mjs';
 
 const output = root + '.local/qa/performance/';
 mkdirSync(output, { recursive: true });
@@ -106,7 +106,7 @@ try {
   await cdp.send('LayerTree.enable');
   cdp.on('LayerTree.layerTreeDidChange', e => { layers = e.layers || []; });
   const start = Date.now();
-  await page.goto(preview.baseURL + '/home/'); await ready(); await page.waitForLoadState('networkidle');
+  await page.goto(preview.baseURL + '/home/'); await ready(); await networkQuiet(page);
   report.startupMs = Date.now() - start;
   const startupResources = await page.evaluate(() => performance.getEntriesByType('resource').map(r => r.name));
   check('No wallpaper gallery thumbnail fetch at startup', !startupResources.some(u => /-thumb\./.test(u)));
@@ -143,7 +143,7 @@ try {
   }
   report.appearanceLoads = loadTimes;
   check('All photo bundles load within bounded browser budget', loadTimes.every(r => r.ms < report.budgets.appearanceMaximumMs), loadTimes);
-  await page.waitForLoadState('networkidle');
+  await networkQuiet(page);
   const beforeSame = await memory();
   const sameWall = (await call('state')).wallpaper;
   for (let i = 0; i < 4; i++) { await call('look', { wall: sameWall }); await ready(); }
@@ -164,14 +164,14 @@ try {
 
   await scene('appearance');
   // Background's current-photo swatch belongs to Settings, not selector preloading.
-  await page.waitForLoadState('networkidle');
+  await networkQuiet(page);
   const beforeGallery = await page.evaluate(() => performance.getEntriesByType('resource').length);
   await call('activate', 'background.wallpaper');
   await page.waitForFunction(() => ShoreQA.where().view === 'wallpaper');
   const beforePreview = (await call('state')).shown.wall;
   await call('nav', 'down');
   await page.waitForFunction(previous => !ShoreQA.state().pending && ShoreQA.state().shown.wall !== previous, beforePreview);
-  await page.waitForLoadState('networkidle');
+  await networkQuiet(page);
   report.gallery = await page.evaluate(start => ({
     thumbnailsFetched: [...new Set(performance.getEntriesByType('resource').filter(r => /-thumb\./.test(r.name)).map(r => r.name))].length,
     images: document.images.length, nodes: document.querySelectorAll('*').length,

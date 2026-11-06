@@ -6,9 +6,25 @@ import { chromium } from 'playwright';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
 
-export async function openPreview({ publicFonts = false } = {}) {
+// Playwright's networkidle has hung with no request open while the CPU is throttled.
+// The page's own resource list going quiet answers the same question without that signal.
+export async function networkQuiet(page, quietMs = 500) {
+  await page.waitForLoadState('load');
+  await page.evaluate(ms => new Promise(resolve => {
+    let count = -1, since = 0;
+    (function poll() {
+      const seen = performance.getEntriesByType('resource').length;
+      if (seen !== count) { count = seen; since = performance.now(); }
+      if (performance.now() - since >= ms) resolve();
+      else setTimeout(poll, 50);
+    })();
+  }), quietMs);
+}
+
+export async function openPreview({ publicFonts = false, duo = false } = {}) {
   const args = ['scripts/preview.py', '--port', '0'];
-  if (publicFonts || process.env.CLEANFRAME_PUBLIC_FONTS === '1') args.push('--public-fonts');
+  // The Duo checks need the private files, whatever the rest of the run asks for.
+  if (!duo && (publicFonts || process.env.CLEANFRAME_PUBLIC_FONTS === '1')) args.push('--public-fonts');
   const server = spawn('python3', args, {
     cwd: root, stdio: ['ignore', 'pipe', 'pipe']
   });
