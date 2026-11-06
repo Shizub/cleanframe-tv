@@ -158,8 +158,11 @@ try {
     let release;
     const held = new Promise(done => { release = done; });
     let page = await open({ wait: false, prepare: p => p.route('**/assets/duo/wall-*.webp', async route => { await held; await route.continue(); }) });
-    await waiting(page); await page.waitForTimeout(400);
+    await waiting(page);
+    check('it goes into hiding at once, with no fade', await page.evaluate(() => getComputedStyle(document.getElementById('duoHome')).transitionDuration) === '0s');
+    await page.waitForTimeout(400);
     check('nothing shows while the wallpaper is on its way', await opacity(page) === '0', await opacity(page));
+    check('the wallpapers are drawn with everything else, not after', await page.evaluate(() => ['duoDayImg', 'duoNightImg'].every(id => document.getElementById(id).decoding === 'sync')));
     release();
     await arrived(page);
     check('then the launcher arrives whole', await page.evaluate(() => document.getElementById('duoDayImg').naturalWidth > 0 && document.getElementById('duoHome').className === 'duo-home'));
