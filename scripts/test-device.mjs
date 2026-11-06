@@ -51,7 +51,7 @@ test('catalogue timeout and late callbacks finish only once', () => {
   assert.equal(results.length, 0);
   h.advance(1);
   assert.equal(results.length, 1);
-  assert.match(results[0].error.message, /did not respond/);
+  assert.match(results[0].error.message, /pas répondu/);
   h.requests[0].ok([]);
   h.requests[0].fail({ message: 'Late failure' });
   assert.equal(results.length, 1);
@@ -76,12 +76,25 @@ test('regional streaming apps stay distinct and system helpers stay hidden', () 
   assert.equal(apps.find(a => a.name === 'HBO Max').brand, 'hbomax');
 });
 
+test('apps outside the default Home stay listed, including Apple Music', () => {
+  const h = harness();
+  let apps;
+  h.device.apps((error, value) => { assert.equal(error, null); apps = value; });
+  h.requests[0].ok([
+    { id: 'org.tizen.apple.apple-music', name: 'Apple Music', show: true },
+    { id: 'IkWsFHtOY9.Stremio', name: 'Stremio', show: true }
+  ]);
+  assert.equal(apps.length, 2);
+  assert.equal(apps.find(a => a.name === 'Apple Music').brand, 'applemusic');
+  assert.equal(apps.find(a => a.name === 'Stremio').brand, '');
+});
+
 test('launch keeps its eight-second deadline independently of discovery', () => {
   const h = harness(), results = [];
   h.device.launchApp('Synthetic.App', error => results.push(error));
   h.advance(8000);
   assert.equal(results.length, 1);
-  assert.match(results[0].message, /did not respond/);
+  assert.match(results[0].message, /pas répondu/);
   h.launches[0].ok();
   assert.equal(results.length, 1);
 });
