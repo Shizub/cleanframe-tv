@@ -15,6 +15,7 @@ All UI assets, public fonts and the fifteen wallpapers are bundled. This private
 - `app/index.html` loads the device adapter, gallery/font/palette catalogues, `assets/icons/metrics.js` and `main.js`, with `style.css`.
 - `main.js` owns the List, Dock and Duo layouts, panel stack, focus, preferences and wallpaper timers. `device.js` owns installed-app discovery and Tizen calls. Keep device details in that adapter.
 - `motion.js` plays Apple-style springs as compositor keyframes for the Duo layout. Nothing runs at rest.
+- `sound.js` plays the Duo sounds. `press` and `perform` in `main.js` call it before drawing, so a sound leaves with its key, and a key never waits for a sound. Only the chosen style is in memory. List and Dock stay silent.
 - Duo panels share the views, keys and state of the other layouts. Only their drawing differs: `renderDuoPanel` in `main.js` draws cards in `#duoPanels` instead of the `#sheet` and `#appearance` screens, so a change to what a panel does applies to all three layouts.
 - An HDMI source on Home is an entry of `APPS` with the id `hdmi<port>`, so the row, the editor and the saved order treat it like an app. Only Duo offers sources. The `devices` preference holds the device chosen for each port, and the logos stay in the private overlay.
 - `refreshCatalog` in `main.js` reads the TV when the launcher comes on screen, and `syncHome` then removes from Home what is no longer installed. `FrameDevice.apps` passes every installed ID as a third argument, because an app on Home need not pass the consumer filter of All apps.

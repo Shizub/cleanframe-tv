@@ -31,6 +31,16 @@ python3 scripts/bake-clock.py
 
 It needs NumPy and Pillow and writes to ignored `.local/materials/duo-clock/`. Review the output, then copy it into `app/assets/duo-clock/`. The Duo wallpaper and glass are private files that this repository neither contains nor generates.
 
+## Duo sounds
+
+`app/assets/sounds/` holds the eight styles as raw 16-bit mono samples at 48 kHz, one file per style, with their table in `bank.js`. `scripts/make-sounds.py` computes seven of them with NumPy, from no recording. It adds Zen from the [UI SFX](https://github.com/romainsimon/uisfx) npm package, which needs `afconvert` from macOS:
+
+```sh
+python3 scripts/make-sounds.py --uisfx <folder of the uisfx package>
+```
+
+It writes to ignored `.local/materials/sounds/` and gives the same bytes each time. Review the output by ear, then copy it into `app/assets/sounds/`. Each gesture has a longest duration and a perceived level in the script, so the styles differ by timbre and not by force.
+
 ## Icon metrics
 
 `node scripts/build-icon-metrics.mjs` measures the SVGs in an aspect-preserved 240px viewport, matching the CSS mask renderer. Output is ignored `.local/materials/metrics.js`; review before copying it into `app/assets/icons/metrics.js`. The TV reads these bounds and does not scan icon pixels.

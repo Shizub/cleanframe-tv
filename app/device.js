@@ -137,5 +137,40 @@
       }, function (err) { finish(failure(err)); });
     } catch (err) { finish(failure(err)); }
   }
-  window.FrameDevice = { launch: launch, launchApp: launchApp, art: art, home: home, settings: settings, apps: apps, sources: sources, setSource: setSource, cancelSource: cancelSource };
+  /* A device plugged in or out. The TV's list is read only when this fires. */
+  function watchSources(done) {
+    var sys = window.tizen && window.tizen.systeminfo;
+    try { if (sys && sys.addPropertyValueChangeListener) sys.addPropertyValueChangeListener('VIDEOSOURCE', done); }
+    catch (err) { /* Inputs still reads the list when it opens. */ }
+  }
+  /* The volume keys reach CleanFrame only once registered. Without the audio API they stay with the TV and its banner. */
+  var VOLUME_KEYS = { VolumeUp: 'up', VolumeDown: 'down', VolumeMute: 'mute' };
+  function audio() { return window.tizen && window.tizen.tvaudiocontrol; }
+  function catchVolumeKeys(on) {
+    var input = window.tizen && window.tizen.tvinputdevice, codes = {}, found = false;
+    if (!audio() || !input) return null;
+    Object.keys(VOLUME_KEYS).forEach(function (name) {
+      try {
+        var key = input.getKey(name);
+        if (!key) return;
+        if (on) input.registerKey(name); else input.unregisterKey(name);
+        codes[key.code] = VOLUME_KEYS[name]; found = true;
+      } catch (err) { /* A key the TV keeps stays with its banner. */ }
+    });
+    return on && found ? codes : null;
+  }
+  function volume() {
+    try { return { level: audio().getVolume(), muted: audio().isMute() }; }
+    catch (err) { return null; }
+  }
+  /* A step up or down also restores a muted sound, as Samsung documents. */
+  function changeVolume(action) {
+    try {
+      if (action === 'up') audio().setVolumeUp();
+      else if (action === 'down') audio().setVolumeDown();
+      else audio().setMute(!audio().isMute());
+    } catch (err) { return null; }
+    return volume();
+  }
+  window.FrameDevice = { launch: launch, launchApp: launchApp, art: art, home: home, settings: settings, apps: apps, sources: sources, setSource: setSource, cancelSource: cancelSource, watchSources: watchSources, catchVolumeKeys: catchVolumeKeys, volume: volume, changeVolume: changeVolume };
 }());

@@ -56,6 +56,14 @@ assert set(duo_clock['glyphs']) == set('0123456789:'), 'The Duo clock needs ever
 for glyph in duo_clock['glyphs'].values():
     for scheme in ['day', 'night']:
         assert (app / ('assets/duo-clock/' + scheme + '/' + glyph['file'] + '.webp')).is_file(), 'Missing Duo digit: ' + scheme + '/' + glyph['file']
+# The sounds stay in the source: they are computed here, or CC0 with their licence beside them.
+sounds = json.loads(re.sub(r'^window\.CleanFrameSounds = |;\s*$', '', (app / 'assets/sounds/bank.js').read_text()))
+assert set(sounds['families']) == {'verre', 'goutte', 'zen', 'galet', 'bois', 'feutre', 'bronze', 'ardoise'}, 'The Duo needs its eight sound styles'
+gestures = {'edge', 'switch', 'ok', 'back', 'panelIn', 'panelOut', 'wake', 'launch', 'sourceOn', 'sourceOff', 'error'} | {'select%d' % i for i in range(sounds['notes'])}
+for name, family in sounds['families'].items():
+    assert set(family['sounds']) == gestures, 'Missing a gesture in the sound style: ' + name
+    assert (app / 'assets/sounds' / family['file']).stat().st_size == 2 * sum(count for _, count in family['sounds'].values()), 'The sound table and samples differ: ' + name
+assert (app / 'assets/sounds/LICENSE-AUDIO').is_file(), 'Zen keeps its licence beside the sounds'
 for filename in ['index.html']:
     source = (app / filename).read_text()
     pattern = r'(?:src|href)=[\"\']([^\"\']+)' if filename.endswith('.html') else r'from\s+[\"\']([^\"\']+)'

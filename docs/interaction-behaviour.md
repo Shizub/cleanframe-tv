@@ -45,6 +45,14 @@ A font or photo change applies only after its resources are ready and storage su
 
 The selected font applies to Home app names, the clock and Home controls, including Newsreader. Settings, All apps, the Home editor and status text retain Manrope. The preview shows the committed Home appearance and its clock continues to update. Pangram faces are available in Nathan's private build when the local files are present; their binaries are not included in the public source. An unavailable optional face is omitted. If the baseline font is slow or missing, Home remains usable with a local fallback and can recover when the font loads.
 
+### Duo sounds and volume
+
+Each gesture has its sound: a click that rises from left to right along the row, a dull one at the end of a row, an opener one between the capsules, a press for OK and for Back, a breath in and out with a card, a low note when the row wakes, a short rise when an app or a source takes over, two notes when a device is plugged in or out, and two knocks for a refusal. A held key spaces its clicks and softens them. There is no sound at startup, at rest, when the minute changes or while the TV is muted, and the sound stops when an app or a source takes over.
+
+Settings → Sons offers Normal, Discret (the default) and Coupés, and the style: Verre (the default), Goutte, Zen, Galet, Bois, Feutre, Bronze or Ardoise. Choosing a style plays it. At night the sounds are softer and less bright. Sortie du son opens the TV's settings, since the public API can neither choose nor name the output, and the sounds follow that choice. List and Dock stay silent.
+
+In Duo, the launcher takes the volume keys while it is on screen and changes the volume through the TV's public API, with a pill of baked glass and a click at each step, in place of Samsung's banner. Inside an app, the TV keeps its banner. If the audio API is missing or refuses, the keys go back to the TV. Whether Samsung's banner stays away, and whether the number is right with an external speaker, is only known on the TV.
+
 ## Streaming apps
 
 The six default apps keep their known native IDs. Other installed consumer apps can also be added to Home. Launching uses the public `tizen.application.launch` API with the app's native ID. Missing apps and denied launches produce a real error. No web player, placeholder success page or account credential is embedded.

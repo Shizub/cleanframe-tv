@@ -36,6 +36,12 @@ The sun position uses the low-precision formulas published by [Astronomy Answers
 
 The Duo wallpaper, its glass and its baked icons derive from images owned by others. They stay in ignored `.local/duo/`, enter only a personal build or the private preview, and are excluded from the source, the public export and this repository's history.
 
+## Sounds
+
+Verre, Goutte, Galet, Bois, Feutre, Bronze and Ardoise in `app/assets/sounds/` are computed by `scripts/make-sounds.py`, without any outside recording, and are covered by the project's MIT licence.
+
+Zen is derived from the Zen pack of [UI SFX](https://github.com/romainsimon/uisfx) 0.4.0, whose audio is dedicated to the public domain under CC0 1.0. `scripts/make-sounds.py` matches its loudness and tunes its click along the scale. The licence text is `app/assets/sounds/LICENSE-AUDIO`.
+
 ## Development dependencies and exports
 
 Development dependencies retain the licences in their npm packages. They are not copied into the TV JavaScript runtime.

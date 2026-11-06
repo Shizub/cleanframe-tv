@@ -20,8 +20,9 @@ function check(name, ok, detail) {
 /* Runs in the page, before the app. The same public API shape as the real adapter expects. */
 function installTv(seed) {
   if (seed.value && !localStorage.getItem(seed.key)) localStorage.setItem(seed.key, JSON.stringify(seed.value));
-  if (seed.hidden) { window.__hidden = true; Object.defineProperty(document, 'hidden', { configurable: true, get: () => window.__hidden }); }
-  const tv = window.__tv = { launched: [], controls: [], sources: [], reads: 0, refuse: false, refuseSource: false, noSources: false, noApps: false };
+  window.__hidden = !!seed.hidden;
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => window.__hidden });
+  const tv = window.__tv = { launched: [], controls: [], sources: [], reads: 0, refuse: false, refuseSource: false, noSources: false, noApps: false, connected: [1, 2], keys: [], volume: { level: 18, muted: false, refuse: false } };
   tv.catalogue = [['org.tizen.netflix-app', 'Netflix'], ['9Ur5IzDKqV.TizenYouTube', 'YouTube'], ['org.tizen.primevideo', 'Prime Video'], ['MCmYXNxgcu.DisneyPlus', 'Disney+'],
     ['com.samsung.tv.aria-video', 'Apple TV'], ['rJeHak5zRg.Spotify', 'Spotify'], ['Qa12345678.StreamA', 'Stream A'], ['Qa12345678.StreamB', 'Stream B'], ['Qa12345678.StreamC', 'Stream C']]
     .concat(Array.from({ length: seed.more || 0 }, (_, i) => ['Qa12345678.Extra' + (i + 10), 'Extra ' + (i + 10)]))
@@ -37,21 +38,39 @@ function installTv(seed) {
       launch(id, ok, fail) { tv.launched.push(id); setTimeout(() => (tv.refuse ? fail({ message: 'La télé a refusé.' }) : ok()), 0); },
       launchAppControl(control, id, ok) { tv.controls.push({ id, data: control.data.map(item => item.key + '=' + item.value) }); setTimeout(ok, 0); }
     },
-    systeminfo: { getPropertyValue(name, ok, fail) { setTimeout(() => (tv.noSources ? fail({ message: 'Entrées illisibles.' }) : ok({ connected: hdmi.slice(0, 2), disconnected: hdmi.slice(2) })), 0); } },
+    systeminfo: {
+      getPropertyValue(name, ok, fail) { setTimeout(() => (tv.noSources ? fail({ message: 'Entrées illisibles.' }) : ok({ connected: hdmi.filter(s => tv.connected.includes(s.number)), disconnected: hdmi.filter(s => !tv.connected.includes(s.number)) })), 0); },
+      addPropertyValueChangeListener(name, run) { window.__plug = run; }
+    },
     tvwindow: { getSource: () => hdmi[0], setSource(source, ok, fail) { tv.sources.push(source.number); setTimeout(() => (tv.refuseSource ? fail({ message: 'Entrée refusée.' }) : ok(source)), 0); } }
+  };
+  if (seed.noAudio) return;
+  const refused = () => { if (tv.volume.refuse) throw Error('Refusé.'); };
+  window.tizen.tvaudiocontrol = {
+    getVolume: () => tv.volume.level, isMute: () => tv.volume.muted,
+    setVolumeUp() { refused(); tv.volume.level = Math.min(100, tv.volume.level + 1); tv.volume.muted = false; },
+    setVolumeDown() { refused(); tv.volume.level = Math.max(0, tv.volume.level - 1); tv.volume.muted = false; },
+    setMute(value) { refused(); tv.volume.muted = value; }
+  };
+  window.tizen.tvinputdevice = {
+    getKey: name => ({ VolumeUp: 447, VolumeDown: 448, VolumeMute: 449 }[name] ? { name, code: { VolumeUp: 447, VolumeDown: 448, VolumeMute: 449 }[name] } : null),
+    registerKey(name) { tv.keys.push(name); },
+    unregisterKey(name) { tv.keys = tv.keys.filter(key => key !== name); }
   };
 }
 
 const preview = await openPreview({ duo: true });
-async function open({ home, look, time, clock, more, missing, hidden, devices } = {}) {
+async function open({ home, look, time, clock, more, missing, hidden, devices, noAudio } = {}) {
   const context = await preview.browser.newContext({ viewport: { width: 1920, height: 1080 }, timezoneId: 'Europe/Paris' });
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
+  page.sounds = [];
+  page.on('request', request => { if (request.url().endsWith('.pcm')) page.sounds.push(request.url().split('/').pop()); });
   page.on('pageerror', error => check('no page error', false, error.message));
   page.on('response', response => { if (response.status() >= 400) check('no failed request', false, response.status() + ' ' + response.url()); });
   await page.route('https://api.open-meteo.com/**', route => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ current: { temperature_2m: 12.4, weather_code: 3 } }) }));
   const value = home || look || devices ? { dock: home || DEFAULTS, look: { layout: 'duo', ...look }, devices } : null;
-  await page.addInitScript(installTv, { key: KEY, value, more, missing, hidden });
+  await page.addInitScript(installTv, { key: KEY, value, more, missing, hidden, noAudio });
   if (clock) await page.clock.install();
   if (time) await page.clock.setFixedTime(new Date(time));
   await page.goto(preview.baseURL + '/home/');
@@ -221,7 +240,7 @@ try {
     check('Settings opens', (await where(page)).view === 'settings', await where(page));
     const rows = await page.evaluate(() => ShoreQA.actions());
     check('Settings only offers what Duo uses', rows.some(a => /scheme/.test(a)) && !rows.some(a => /background|typography|focus/.test(a)), rows);
-    for (let i = 0; i < 2; i++) await nav(page, 'down');
+    for (let i = 0; i < 3; i++) await nav(page, 'down');
     await nav(page, 'ok'); await settled(page);
     check('Apps on Home opens the editor', (await where(page)).view === 'editor', await where(page));
     await page.waitForFunction(() => ShoreQA.state().catalog.loaded);
@@ -319,7 +338,7 @@ try {
     check('the old panels stay out of the way', around.sheet && around.details, around);
     check('the clock and the row step aside', await value(page, '#duoFace', 'o') === 0);
     check('one selection stays active', (await where(page)).focusCount === 1, await where(page));
-    check('Settings only lists what Duo uses', c.rows.join() === 'Apparence,Disposition,Applis de l’accueil,Samsung', c.rows);
+    check('Settings only lists what Duo uses', c.rows.join() === 'Apparence,Disposition,Sons,Applis de l’accueil,Samsung', c.rows);
 
     await nav(page, 'down'); await rested(page);
     c = await card(page);
@@ -449,7 +468,7 @@ try {
     const y = id => page.evaluate(line => { const list = Array.prototype.filter.call(document.querySelectorAll('.duo-eline'), el => el.querySelector('.duo-eline-name').textContent === line); return window.Motion.valueOf(list[0]).y; }, id);
     const dock = () => saved(page).then(c => c.dock);
     await openFromHome(page, 'util.settings');
-    await nav(page, 'down', 'down', 'ok');
+    await nav(page, 'down', 'down', 'down', 'ok');
     await page.waitForFunction(() => ShoreQA.state().catalog.loaded); await rested(page);
     check('the editor is one card', (await card(page)).count === 1 && (await card(page)).title === 'Applis de l’accueil', await card(page));
     check('it starts on the app selected on Home', (await where(page)).focusAction === 'editor.move.spotify' && (await where(page)).focusCount === 1, await where(page));
@@ -490,7 +509,7 @@ try {
   {
     const page = await open({ home: ['netflix'] });
     await openFromHome(page, 'util.settings');
-    await nav(page, 'down', 'down', 'ok'); await rested(page);
+    await nav(page, 'down', 'down', 'down', 'ok'); await rested(page);
     await nav(page, 'right', 'ok'); await rested(page);
     check('the last app stays', (await state(page)).home.join() === 'netflix' && /garder une appli/.test(await toast(page)), await toast(page));
     await page.context().close();
@@ -498,7 +517,7 @@ try {
   {
     const page = await open({ home: DEFAULTS.concat(EXTRA), more: 20 });
     await openFromHome(page, 'util.settings');
-    await nav(page, 'down', 'down', 'ok');
+    await nav(page, 'down', 'down', 'down', 'ok');
     await page.waitForFunction(() => ShoreQA.state().catalog.loaded); await rested(page);
     const rows = await page.evaluate(() => Array.prototype.filter.call(document.querySelectorAll('.duo-eline.is-home'), () => true).map(el => window.Motion.valueOf(el).y));
     check('nine apps fit without a scroll hint', rows.length === 9 && rows.every((top, i) => !i || top - rows[i - 1] === 76) && rows[8] + 72 <= 704, rows);
@@ -653,7 +672,7 @@ try {
     const page = await open({ home: ['hdmi2', 'netflix', 'youtube'] });
     await loaded(page);
     await openFromHome(page, 'util.settings');
-    await nav(page, 'down', 'down', 'ok'); await rested(page);
+    await nav(page, 'down', 'down', 'down', 'ok'); await rested(page);
     await page.evaluate(() => ShoreQA.activate('editor.remove.youtube')); await rested(page);
     check('a removed app waits in the recent ones', (await state(page)).recent.join() === 'youtube', (await state(page)).recent);
     await uninstall(page, 'org.tizen.netflix-app', '9Ur5IzDKqV.TizenYouTube');
@@ -687,7 +706,7 @@ try {
     const page = await open();
     await loaded(page);
     await openFromHome(page, 'util.settings');
-    await nav(page, 'down', 'down', 'ok'); await rested(page);
+    await nav(page, 'down', 'down', 'down', 'ok'); await rested(page);
     await nav(page, 'ok');
     const draft = (await state(page)).draft;
     await uninstall(page, 'org.tizen.netflix-app');
@@ -702,6 +721,264 @@ try {
     await page.evaluate(() => { window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); });
     await loaded(page);
     check('the TV is read once on screen', (await tv(page)).reads === 1 && (await state(page)).catalog.inputs.length === 3, (await tv(page)).reads);
+    await page.context().close();
+  }
+
+  section = 'Sounds';
+  const played = page => page.evaluate(() => Sound.played.slice());
+  const heard = page => played(page).then(list => list.map(p => p.name).sort().join());
+  const forget = page => page.evaluate(() => { Sound.played.length = 0; });
+  const soundReady = page => page.waitForFunction(() => Sound.ready());
+  /* One key, then long enough for the rule of held keys to let the next click through. */
+  const hear = async (page, key) => { await forget(page); await page.keyboard.press(key); await page.waitForTimeout(260); return heard(page); };
+  {
+    const page = await open();
+    await soundReady(page); await page.waitForTimeout(100);
+    check('starting up is silent', await heard(page) === '', await heard(page));
+    check('only the chosen style is read', page.sounds.join() === 'verre.pcm', page.sounds);
+    await forget(page); await page.keyboard.press('ArrowRight'); await page.waitForTimeout(260);
+    const first = (await played(page))[0];
+    check('a step along the row is a click', first && first.name === 'select' && first.family === 'verre' && first.level === 'discret', first);
+    await forget(page); await page.keyboard.press('ArrowRight'); await page.waitForTimeout(260);
+    const second = (await played(page))[0];
+    check('it rises and moves to the right', second.note > first.note && second.pan > first.pan, [first, second]);
+    check('Up and Down are silent on Home', await hear(page, 'ArrowUp') === '' && await hear(page, 'ArrowDown') === '', await heard(page));
+    await goTo(page, 'home.app.spotify'); await page.waitForTimeout(260);
+    check('crossing to the controls is a wider click', await hear(page, 'ArrowRight') === 'switch', await heard(page));
+    check('coming back too', await hear(page, 'ArrowLeft') === 'switch', await heard(page));
+    await goTo(page, 'util.settings'); await page.waitForTimeout(260);
+    check('the end of the row is a dull click', await hear(page, 'ArrowRight') === 'edge', await heard(page));
+    await forget(page);
+    await page.keyboard.down('ArrowRight');
+    for (let i = 0; i < 30; i++) { await page.waitForTimeout(33); await page.keyboard.down('ArrowRight'); }
+    await page.keyboard.up('ArrowRight'); await page.waitForTimeout(260);
+    check('a held key at the end does not repeat it', (await played(page)).length <= 1, await heard(page));
+    await goTo(page, 'home.app.netflix'); await page.waitForTimeout(260);
+    await forget(page);
+    await page.keyboard.down('ArrowRight');
+    for (let i = 0; i < 9; i++) { await page.waitForTimeout(33); await page.keyboard.down('ArrowRight'); }
+    await page.keyboard.up('ArrowRight'); await page.waitForTimeout(260);
+    const held = await played(page);
+    check('a held key spaces its clicks and softens them', held.length > 1 && held.length < 10 && held.at(-1).gain < held[0].gain, held.map(p => p.gain));
+    await goTo(page, 'home.app.youtube'); await page.waitForTimeout(260);
+    check('OK on an app presses and launches', await hear(page, 'Enter') === 'launch,ok', await heard(page));
+    check('Back on Home opens the card', await hear(page, 'Escape') === 'back,panelIn', await heard(page));
+    await page.waitForTimeout(500);
+    check('Back again closes it', await hear(page, 'Escape') === 'back,panelOut', await heard(page));
+    await page.context().close();
+  }
+  {
+    const page = await open();
+    await soundReady(page);
+    await goTo(page, 'util.settings'); await page.waitForTimeout(260);
+    check('OK opens a card', await hear(page, 'Enter') === 'ok,panelIn', await heard(page));
+    await rested(page);
+    await forget(page); await page.keyboard.press('ArrowDown'); await page.waitForTimeout(260);
+    const low = (await played(page))[0];
+    await forget(page); await page.keyboard.press('ArrowUp'); await page.waitForTimeout(260);
+    const high = (await played(page))[0];
+    check('a list is higher at the top', high.name === 'select' && low.name === 'select' && high.note > low.note, [high, low]);
+    check('the end of a list is a dull click', await hear(page, 'ArrowUp') === 'edge', await heard(page));
+    check('Left and Right are silent in a list', await hear(page, 'ArrowLeft') === '', await heard(page));
+    await page.keyboard.press('Escape'); await rested(page);
+    await openFromHome(page, 'util.apps'); await loaded(page); await rested(page);
+    check('a step in the grid is a click', await hear(page, 'ArrowRight') === 'select', await heard(page));
+    check('the edge of the grid is a dull click', await hear(page, 'ArrowLeft') === 'select' && await hear(page, 'ArrowLeft') === 'edge', await heard(page));
+    check('reaching the top button is a wider click', await hear(page, 'ArrowUp') === 'switch', await heard(page));
+    check('Up from it is silent', await hear(page, 'ArrowUp') === '', await heard(page));
+    await hear(page, 'Enter'); await rested(page);
+    check('a move in the editor is a click', await hear(page, 'ArrowRight') === 'select', await heard(page));
+    check('reaching the other column is a wider click', await hear(page, 'ArrowRight') === 'switch', await heard(page));
+    await page.context().close();
+  }
+  {
+    const page = await open({ home: ['netflix'] });
+    await soundReady(page);
+    await openFromHome(page, 'util.settings');
+    await nav(page, 'down', 'down', 'down', 'ok'); await rested(page);
+    await nav(page, 'right');
+    check('a refusal is two knocks', await hear(page, 'Enter') === 'error', await heard(page));
+    await page.context().close();
+  }
+  {
+    const page = await open();
+    await soundReady(page);
+    await page.evaluate(() => { window.__tv.refuse = true; });
+    await goTo(page, 'home.app.youtube'); await page.waitForTimeout(260);
+    await forget(page); await page.keyboard.press('Enter'); await settled(page);
+    check('a launch the TV refuses is heard as one', (await heard(page)).split(',').includes('error'), await heard(page));
+    await page.context().close();
+  }
+  {
+    const page = await open({ clock: true });
+    await soundReady(page);
+    await page.clock.fastForward(21000);
+    check('the row stepping aside is silent', (await state(page)).duo.idle === true && await heard(page) === '', await heard(page));
+    await page.clock.fastForward(120000);
+    check('the minute changing is silent', await heard(page) === '', await heard(page));
+    await page.keyboard.press('ArrowRight');
+    check('the first key only wakes, with a low note', await heard(page) === 'wake' && (await where(page)).focusAction === 'home.app.netflix', [await heard(page), await where(page)]);
+    await page.context().close();
+  }
+  {
+    const page = await open();
+    await soundReady(page);
+    const level = () => page.evaluate(() => [Sound.output() && Sound.output().gain.value, Sound.filter() && Sound.filter().frequency.value]);
+    await page.keyboard.press('ArrowRight');
+    await page.evaluate(() => ShoreQA.look({ scheme: 'day' }));
+    check('Discret is the default', Math.abs((await level())[0] - .4) < .001 && (await level())[1] === 20000 && (await state(page)).sound === 'discret', await level());
+    await page.evaluate(() => ShoreQA.look({ scheme: 'night' }));
+    check('the night is softer and less bright', Math.abs((await level())[0] - .28) < .001 && (await level())[1] === 3000, await level());
+    await page.evaluate(() => ShoreQA.look({ scheme: 'day' }));
+    await goTo(page, 'util.settings'); await nav(page, 'ok', 'down', 'down'); await nav(page, 'ok'); await rested(page);
+    let c = await card(page);
+    check('Sons offers its levels and its style', c.title === 'Sons' && c.rows.join() === 'Normal,Discret,Coupés,Style de son,Sortie du son' && c.checked.join() === 'Discret' && (await where(page)).focusAction === 'choice.sound.discret', [c, await where(page)]);
+    check('it says what the night does', /nuit/.test(c.sub), c.sub);
+    const lineValue = n => page.evaluate(i => document.querySelectorAll('.duo-card:not(.is-leaving) .duo-line-value')[i].textContent, n);
+    check('the style line names the style', await lineValue(3) === 'Verre', await lineValue(3));
+    await page.keyboard.press('ArrowUp'); await page.waitForTimeout(260);
+    check('Normal is applied and heard at its level', await hear(page, 'Enter') === 'ok' && (await played(page))[0].level === 'normal' && (await level())[0] === 1 && (await saved(page)).look.sound === 'normal', [await played(page), await level()]);
+    await nav(page, 'down', 'down'); await page.waitForTimeout(260);
+    check('Coupés is silent, even for its own press', await hear(page, 'Enter') === '' && (await saved(page)).look.sound === 'coupes', await heard(page));
+    check('and nothing plays afterwards', await hear(page, 'ArrowUp') === '', await heard(page));
+    await page.keyboard.press('ArrowUp'); await page.keyboard.press('Enter'); await page.waitForTimeout(260);
+    check('the sounds come back', await hear(page, 'ArrowDown') === 'select', await heard(page));
+    await nav(page, 'down', 'down'); await page.waitForTimeout(260);
+    await nav(page, 'ok'); await rested(page);
+    c = await card(page);
+    check('Style de son lists the eight, from the clearest to the lowest', c.title === 'Style de son' && c.rows.join() === 'Verre,Goutte,Zen,Galet,Bois,Feutre,Bronze,Ardoise' && c.checked.join() === 'Verre' && (await where(page)).focusAction === 'choice.soundStyle.verre', c);
+    check('each says how it sounds', await lineValue(4) === 'chaud, comme un marimba', await lineValue(4));
+    await nav(page, 'down', 'down', 'down', 'down'); await page.waitForTimeout(260);
+    await forget(page); await page.keyboard.press('Enter');
+    await page.waitForFunction(() => Sound.ready() && Sound.family() === 'bois'); await page.waitForTimeout(100);
+    const bois = await played(page);
+    check('choosing a style plays it once it is here', bois.length === 1 && bois[0].name === 'ok' && bois[0].family === 'bois', bois);
+    check('the other styles stay unread until asked for', page.sounds.join() === 'verre.pcm,bois.pcm', page.sounds);
+    check('it is saved', (await saved(page)).look.soundStyle === 'bois');
+    check('the card marks it', (await card(page)).checked.join() === 'Bois', await card(page));
+    await nav(page, 'back'); await rested(page);
+    check('the line above shows it', await lineValue(3) === 'Bois', await lineValue(3));
+    page.sounds.length = 0;
+    await page.reload(); await ready(page); await soundReady(page);
+    await page.waitForTimeout(100);
+    check('a restart reads only that style', page.sounds.join() === 'bois.pcm' && (await state(page)).sound === 'normal', page.sounds);
+    check('and it is silent, whatever the style', await heard(page) === '', await heard(page));
+    await goTo(page, 'util.settings'); await nav(page, 'ok', 'down', 'down', 'ok', 'down', 'down', 'down', 'down', 'ok'); await settled(page);
+    check('Sortie du son opens the TV\'s settings', (await tv(page)).launched.at(-1) === 'com.samsung.tv.coba.setting', (await tv(page)).launched);
+    await page.context().close();
+  }
+  {
+    const page = await open();
+    await soundReady(page);
+    await page.keyboard.press('ArrowRight');
+    const signal = await page.evaluate(async () => {
+      const ctx = Sound.context(), meter = ctx.createAnalyser(), data = new Float32Array(meter.fftSize);
+      let peak = 0;
+      Sound.output().connect(meter);
+      Sound.play('wake');
+      for (let i = 0; i < 12; i++) { await new Promise(done => setTimeout(done, 30)); meter.getFloatTimeDomainData(data); peak = Math.max(peak, ...data.map(Math.abs)); }
+      return { state: ctx.state, peak };
+    });
+    check('the sound really reaches the output', signal.state === 'running' && signal.peak > .001, signal);
+    await goTo(page, 'home.app.youtube'); await page.waitForTimeout(260);
+    await page.keyboard.press('Enter');
+    await page.evaluate(() => { window.__hidden = true; document.dispatchEvent(new Event('visibilitychange')); });
+    await page.waitForTimeout(150);
+    check('it stops as soon as an app takes over', await page.evaluate(() => Sound.context().state) === 'suspended');
+    await page.evaluate(() => { window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); }); await settled(page);
+    check('coming back is silent, and a key opens it again', await hear(page, 'ArrowLeft') === 'select' && await page.evaluate(() => Sound.context().state) === 'running', await heard(page));
+    await forget(page);
+    await page.evaluate(() => { window.__tv.connected = [1, 2, 3]; window.__plug(); }); await settled(page);
+    check('a device plugged in is two rising notes', await heard(page) === 'sourceOn', await heard(page));
+    await forget(page);
+    await page.evaluate(() => { window.__tv.connected = [1]; window.__plug(); }); await settled(page);
+    check('a device unplugged is two falling ones', await heard(page) === 'sourceOff', await heard(page));
+    await forget(page);
+    await page.evaluate(() => { window.__tv.connected = [1, 3]; window.__hidden = true; window.__plug(); }); await settled(page);
+    check('nothing is read or heard behind an app', await heard(page) === '', await heard(page));
+    await page.evaluate(() => { window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); });
+    await openFromHome(page, 'util.inputs'); await rested(page);
+    await page.evaluate(() => { window.__tv.connected = [1, 2, 3]; window.__plug(); }); await rested(page);
+    check('an open Entrées follows the plug', await page.evaluate(() => !document.querySelectorAll('.duo-card:not(.is-leaving) .duo-line')[1].className.includes('is-dim')), await card(page));
+    await page.evaluate(() => Sound.use('element')); await soundReady(page);
+    const length = await page.evaluate(() => new Promise(done => { const clip = Sound.clip('ok'); clip.onerror = () => done(-1); clip.onloadedmetadata = () => done(clip.duration); if (clip.readyState >= 1) done(clip.duration); }));
+    check('the audio element gets a file it can read', length > .05 && length < .2, length);
+    await page.keyboard.press('Escape'); await settled(page);
+    check('and plays it', (await played(page)).at(-1).method === 'element', (await played(page)).at(-1));
+    await page.context().close();
+  }
+  {
+    const page = await open({ look: { layout: 'dock' } });
+    await page.waitForTimeout(100);
+    await page.keyboard.press('ArrowRight'); await page.keyboard.press('Enter'); await page.waitForTimeout(100);
+    check('List and Dock stay silent', page.sounds.length === 0 && await heard(page) === '', [page.sounds, await heard(page)]);
+    await page.context().close();
+  }
+
+  section = 'Volume pill';
+  const VOLUME = { up: 447, down: 448, mute: 449 };
+  const volumeKey = (page, name) => page.evaluate(code => document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: code, bubbles: true })), VOLUME[name]);
+  const pill = page => page.evaluate(() => ({ o: window.Motion.valueOf(document.getElementById('duoVol')).o, value: document.querySelector('.duo-vol-value').textContent, fill: window.Motion.valueOf(document.querySelector('.duo-vol-fill')).x, icon: document.querySelector('.duo-vol-icon svg').querySelectorAll('path').length }));
+  {
+    const page = await open();
+    await soundReady(page);
+    check('Duo takes the volume keys', (await tv(page)).keys.join() === 'VolumeUp,VolumeDown,VolumeMute', (await tv(page)).keys);
+    const box = await page.evaluate(() => { const r = document.getElementById('duoVol').getBoundingClientRect(), g = window.CleanFrameDuo.glass.vol; return { l: r.left, t: r.top, w: r.width, h: r.height, g, o: getComputedStyle(document.getElementById('duoVol')).opacity, images: Array.prototype.map.call(document.querySelectorAll('#duoVol img'), img => [img.getAttribute('src').split('/').pop(), img.naturalWidth > 0]) }; });
+    check('the pill waits unseen on its baked glass', Number(box.o) === 0 && box.images.join() === 'vol-day.webp,true,vol-night.webp,true', box);
+    const focus = (await where(page)).focusAction;
+    await page.keyboard.press('ArrowRight'); await page.waitForTimeout(260);
+    const before = (await where(page)).focusAction;
+    await forget(page);
+    await volumeKey(page, 'up');
+    let v = await pill(page);
+    check('a press changes the TV\'s volume', (await tv(page)).volume.level === 19, (await tv(page)).volume);
+    check('the pill shows it', v.o === 1 && v.value === '19' && Math.abs(v.fill - (.19 * 228 - 228)) < .01 && v.icon === 3, v);
+    const click = (await played(page))[0];
+    check('each step is a click from its corner', click.name === 'select' && click.pan < -.3, click);
+    check('the selection stays where it was', (await where(page)).focusAction === before && before !== focus, await where(page));
+    await rested(page);
+    const place = await page.evaluate(() => { const r = document.getElementById('duoVol').getBoundingClientRect(), g = window.CleanFrameDuo.glass.vol; return [r.left, r.top, g.x, g.y]; });
+    check('it appears in place, on its glass', Math.abs(place[0] - place[2]) < 1 && Math.abs(place[1] - place[3]) < 1, place);
+    await page.waitForTimeout(100); await forget(page);
+    await volumeKey(page, 'down');
+    check('Volume down follows', (await tv(page)).volume.level === 18 && (await pill(page)).value === '18', (await pill(page)));
+    await page.waitForTimeout(260); await forget(page);
+    await volumeKey(page, 'mute');
+    v = await pill(page);
+    check('Mute shows it and silences the launcher', (await tv(page)).volume.muted && v.value === 'Coupé' && v.fill === -228 && v.icon === 2 && await heard(page) === '', [v, await heard(page)]);
+    check('no click while muted', await hear(page, 'ArrowRight') === '', await heard(page));
+    await page.waitForTimeout(260);
+    await forget(page);
+    await volumeKey(page, 'up');
+    check('a step brings the sound back, as on the TV', !(await tv(page)).volume.muted && (await pill(page)).value === '19' && await heard(page) === 'select', [await tv(page), await heard(page)]);
+    await page.evaluate(() => { window.__tv.volume.level = 1; });
+    await page.waitForTimeout(260);
+    await volumeKey(page, 'down');
+    check('volume zero is silent too', (await pill(page)).value === '0' && (await pill(page)).icon === 2 && await hear(page, 'ArrowLeft') === '', await pill(page));
+    await volumeKey(page, 'up');
+    await page.waitForTimeout(2800);
+    check('the pill goes away by itself', (await pill(page)).o === 0, await pill(page));
+    await page.evaluate(() => ShoreQA.look({ scheme: 'night' })); await page.waitForFunction(() => ShoreQA.state().duo.scheme === 'night');
+    check('its glass follows the night', await page.evaluate(() => document.querySelector('#duoVol .duo-night').style.opacity) === '1');
+    await page.evaluate(() => { window.__tv.volume.muted = true; window.__hidden = true; document.dispatchEvent(new Event('visibilitychange')); window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); }); await page.waitForTimeout(260);
+    check('coming back reads the TV again', await hear(page, 'ArrowRight') === '', await heard(page));
+    await page.evaluate(() => ShoreQA.look({ layout: 'dock' })); await ready(page);
+    check('Dock gives the keys back', (await tv(page)).keys.length === 0, (await tv(page)).keys);
+    const level = (await tv(page)).volume.level;
+    await volumeKey(page, 'up');
+    check('and leaves the volume to the TV', (await tv(page)).volume.level === level, (await tv(page)).volume);
+    await page.evaluate(() => ShoreQA.look({ layout: 'duo' })); await ready(page);
+    check('Duo takes them again', (await tv(page)).keys.length === 3, (await tv(page)).keys);
+    await page.evaluate(() => { window.__tv.volume.refuse = true; });
+    await volumeKey(page, 'up');
+    check('a TV that refuses gets its keys back', (await tv(page)).keys.length === 0 && (await where(page)).focusCount === 1, (await tv(page)).keys);
+    await page.context().close();
+  }
+  {
+    const page = await open({ noAudio: true });
+    check('without the audio API the keys stay with the TV', (await tv(page)).keys.length === 0, (await tv(page)).keys);
+    await volumeKey(page, 'up');
+    check('and nothing shows', await value(page, '#duoVol', 'o') === 0 && (await where(page)).focusCount === 1);
     await page.context().close();
   }
 
@@ -804,6 +1081,8 @@ section = 'Public build';
     check('the catalogue is empty', await page.evaluate(() => window.CleanFrameDuo === null));
     check('a saved Duo falls back to Dock', (await state(page)).layout === 'dock', (await state(page)).layout);
     check('nothing private is asked for', !requests.some(url => url.includes('/assets/duo/')), requests.filter(url => url.includes('/assets/duo/')));
+    check('no sound is read for nothing', !requests.some(url => url.endsWith('.pcm')), requests.filter(url => url.endsWith('.pcm')));
+    check('the volume keys stay with the TV', (await tv(page)).keys.length === 0, (await tv(page)).keys);
     const direct = await page.evaluate(() => fetch('assets/duo/wall-day.webp').then(r => r.status));
     check('the private files are not served', direct === 404, direct);
     await context.close();

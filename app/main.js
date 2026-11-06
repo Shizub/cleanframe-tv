@@ -27,7 +27,7 @@
   var WEATHER_PLACE = { name: 'Paris', lat: 48.85, lon: 2.35 }, WEATHER_MS = 1800000, WEATHER_RETRY_MS = 300000;
   var weather = { text: '', temp: null, at: 0, loading: false };
   /* The Duo catalogue is empty unless the private overlay supplied its wallpaper and glass. */
-  var DUO = window.CleanFrameDuo || null, DUO_CLOCK = window.CleanFrameDuoClock, M = window.Motion;
+  var DUO = window.CleanFrameDuo || null, DUO_CLOCK = window.CleanFrameDuoClock, M = window.Motion, Sound = window.Sound;
   var WALLS = window.CleanFrameWallpapers || [{ id: 'misty', name: 'Côte brumeuse', tone: 'light', ut: { tr: 'mist', br: 'mist' }, frostVeil: .20 }];
   var ADAPTIVE_INK = window.CleanFrameAdaptiveInk || {};
   WALLS.forEach(function (w) { w.ut = w.ut || { tr: 'light', br: 'light' }; w.frostVeil = w.frostVeil || .12; });
@@ -47,9 +47,10 @@
     newsreader: { name: 'Newsreader', family: 'Study Newsreader', display: 400, ui: 400, clock: 400 }
   };
   var PRIVATE_FONTS = window.CleanFramePrivateFontIDs || [], fontMetrics = {}, unavailableFonts = {}, widthCache = {}, fontRevision = 0, fontsReady = false;
-  var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: DUO ? ['list', 'dock', 'duo'] : ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'], scheme: ['auto', 'day', 'night'] };
-  var LOOK_NAMES = { bg: 'Fond', layout: 'Disposition', apps: 'Applis', font: 'Police', controls: 'Commandes de l’accueil', focus: 'Sélection', material: 'Matière', scheme: 'Apparence' };
-  var VALUE_NAMES = { dark: 'Sombre', light: 'Clair', photo: 'Photo', list: 'Liste', dock: 'Barre', duo: 'Duo', type: 'Texte seul', glass: 'Verre', soft: 'Doux', frost: 'Givré', tint: 'Teinte claire', icons: 'Icônes', both: 'Icônes et texte', text: 'Texte', auto: 'Auto (suit le soleil)', day: 'Jour', night: 'Nuit' };
+  var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: DUO ? ['list', 'dock', 'duo'] : ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'], scheme: ['auto', 'day', 'night'], sound: ['normal', 'discret', 'coupes'], soundStyle: ['verre', 'goutte', 'zen', 'galet', 'bois', 'feutre', 'bronze', 'ardoise'] };
+  var LOOK_NAMES = { bg: 'Fond', layout: 'Disposition', apps: 'Applis', font: 'Police', controls: 'Commandes de l’accueil', focus: 'Sélection', material: 'Matière', scheme: 'Apparence', sound: 'Sons', soundStyle: 'Style de son' };
+  var VALUE_NAMES = { dark: 'Sombre', light: 'Clair', photo: 'Photo', list: 'Liste', dock: 'Barre', duo: 'Duo', type: 'Texte seul', glass: 'Verre', soft: 'Doux', frost: 'Givré', tint: 'Teinte claire', icons: 'Icônes', both: 'Icônes et texte', text: 'Texte', auto: 'Auto (suit le soleil)', day: 'Jour', night: 'Nuit', normal: 'Normal', discret: 'Discret', coupes: 'Coupés', verre: 'Verre', goutte: 'Goutte', zen: 'Zen', galet: 'Galet', bois: 'Bois', feutre: 'Feutre', bronze: 'Bronze', ardoise: 'Ardoise' };
+  var STYLE_HINTS = { verre: 'clair et bref, le style de base', goutte: 'souple, comme de l’eau', zen: 'papier, pinceau et carillons', galet: 'mat et rond', bois: 'chaud, comme un marimba', feutre: 'très doux et feutré', bronze: 'grave et sonore', ardoise: 'le plus grave, sec' };
   var UTIL = { art: ['Mode Art', 'art'], inputs: ['Entrées', 'tv'], apps: ['Toutes les applis', 'apps'], samsung: ['Accueil Samsung', 'home'], arrange: ['Organiser', 'arrange'], settings: ['Réglages', 'settings'] };
   var MSG = {
     leaveDuo: { title: 'Quitter l’accueil ?', line: 'Ouvrir le menu Samsung d’origine ?', note: '', actions: [['stay', 'Rester ici'], ['samsung', 'Menu Samsung']] },
@@ -72,6 +73,8 @@
     updown: '<path d="m7.5 9.5 4.5-4.5 4.5 4.5M7.5 14.5l4.5 4.5 4.5-4.5"/>',
     tv: '<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8.5 20h7"/>',
     cloud: '<path d="M7 18.5h9.5a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 6.6 9.4 4.6 4.6 0 0 0 7 18.5Z"/>',
+    speaker: '<path d="M4 9.5v5h3.5l4.5 4v-13l-4.5 4Z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+    mute: '<path d="M4 9.5v5h3.5l4.5 4v-13l-4.5 4Z"/><path d="m16 9.5 5 5m0-5-5 5"/>',
     warn: '<path d="M12 4 2.8 19.5h18.4Z"/><path d="M12 10v4.5M12 17.3v.1"/>'
   };
 
@@ -91,7 +94,7 @@
     for (var i = 0; i < list.length; i++) if (list[i].toLowerCase() === v) return list[i];
     return fallback;
   }
-  function lookOf(c) { return { bg: c.bg, wall: c.wall, layout: c.layout, apps: c.apps, font: c.font, controls: c.controls, focus: c.focus, material: c.material, scheme: c.scheme }; }
+  function lookOf(c) { return { bg: c.bg, wall: c.wall, layout: c.layout, apps: c.apps, font: c.font, controls: c.controls, focus: c.focus, material: c.material, scheme: c.scheme, sound: c.sound, soundStyle: c.soundStyle }; }
   function materialApplies(c) { c = c || S.c; return c.layout !== 'duo' && c.bg === 'photo' && (c.layout === 'dock' || c.focus === 'glass'); }
 
   /* ---------- Helpers ---------- */
@@ -362,6 +365,7 @@
     var layout = pick(modern.layout, LOOK_VALUES.layout, legacyList ? 'list' : DUO ? 'duo' : 'dock');
     return {
       bg: layout === 'duo' ? 'photo' : pick(modern.bg, LOOK_VALUES.bg, legacyList ? 'dark' : 'photo'), layout: layout, scheme: pick(modern.scheme, LOOK_VALUES.scheme, 'auto'),
+      sound: pick(modern.sound, LOOK_VALUES.sound, 'discret'), soundStyle: pick(modern.soundStyle, LOOK_VALUES.soundStyle, 'verre'),
       apps: pick(modern.apps, LOOK_VALUES.apps, legacyList ? 'text' : 'both'), controls: pick(modern.controls, LOOK_VALUES.controls, 'both'),
       focus: pick(modern.focus, LOOK_VALUES.focus, legacyList ? 'type' : 'glass'), material: pick(modern.material, LOOK_VALUES.material, 'soft'),
       font: pick(modern.font, LOOK_VALUES.font, 'manrope'), wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
@@ -468,11 +472,14 @@
     push({ id: 'message', msg: 'error', content: { title: title, line: line, note: note || '', actions: [['back', 'Retour']] }, f: { b: 0 } });
   }
   function perform(title, run) {
+    var place;
     if (busy) return;
     busy = true; busyTimer = setTimeout(release, 10000);
+    place = duoPlace(top());
+    if (place) duoSound('launch', { x: place.x });
     run(function (err) {
       release();
-      if (err) message(title, err.message || 'La télé n’a pas pu ouvrir cet écran.', err.detail || '');
+      if (err) { message(title, err.message || 'La télé n’a pas pu ouvrir cet écran.', err.detail || ''); duoSound('error'); }
       render(); syncRotation();
     });
   }
@@ -496,18 +503,26 @@
   }
   function knownInputs(list) {
     var ids = list.map(function (input) { return inputEntry(input.number, S.c.devices).id; });
+    duo.connected = list.filter(function (input) { return input.connected; }).map(function (input) { return input.number; });
     if (!ids.length || same(ids, INPUT_IDS)) return false;
     INPUT_IDS = ids; catalog.revision++;
     return true;
   }
-  function refreshSources() {
-    FrameDevice.sources(function (err, list) { if (!err && knownInputs(list)) { norm(); render(); } });
+  function refreshSources(announce) {
+    FrameDevice.sources(function (err, list) {
+      var was = duo.connected;
+      if (err) return;
+      if (knownInputs(list)) { norm(); render(); }
+      if (!announce) return;
+      if (was && !same(was, duo.connected)) duoSound(duo.connected.length > was.length ? 'sourceOn' : 'sourceOff');
+      refreshInputsOnReturn(); after();
+    });
   }
   function refreshCatalog() {
     var request, oldFocus;
     if (catalog.loading) return;
     request = ++catalog.request; catalog.loading = true; catalog.error = null;
-    if (S.c.layout === 'duo') refreshSources();
+    if (S.c.layout === 'duo') refreshSources(false);
     FrameDevice.apps(function (err, entries, installed) {
       if (request !== catalog.request) return;
       catalog.loading = false;
@@ -549,7 +564,7 @@
   function addAppsRoute() { openEditor('home'); }
   function openSettings() { push({ id: 'settings', f: { id: S.settingsFocus } }); }
   function openAppearance(group) {
-    var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', scheme: 'scheme' }[group];
+    var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', scheme: 'scheme', sound: 'sound', soundStyle: 'soundStyle' }[group];
     var action = S.detailFocus[group] || (axis ? 'choice.' + axis + '.' + S.c[axis] : group === 'rotation' ? 'rotation.' + S.c.mode : 'samsung.home');
     push({ id: 'appearance', group: group, f: { action: action } });
   }
@@ -867,6 +882,7 @@
     var n = S.c.home.length;
     if (S.c.layout === 'duo') return [{ id: 'scheme', label: 'Apparence', value: S.c.scheme === 'auto' ? 'Auto (soleil)' : VALUE_NAMES[S.c.scheme] },
       { id: 'layout', label: 'Disposition', value: VALUE_NAMES[S.c.layout] },
+      { id: 'sound', label: 'Sons', value: VALUE_NAMES[S.c.sound] },
       { id: 'editor', label: 'Applis de l’accueil', value: n + (n === 1 ? ' appli' : ' applis') },
       { id: 'samsung', label: 'Samsung', value: '' }];
     return [{ id: 'background', label: 'Fond', value: S.c.bg === 'photo' ? wall(S.c.wall).name : VALUE_NAMES[S.c.bg] },
@@ -894,7 +910,7 @@
     if (id === 'editor') openEditor('settings');
     else openAppearance(id);
   }
-  var DETAIL_NAMES = { background: 'Fond', layout: 'Disposition', typography: 'Typographie', focus: 'Sélection', rotation: 'Rotation', samsung: 'Samsung', inputs: 'Entrées', devices: 'Appareils', scheme: 'Apparence' };
+  var DETAIL_NAMES = { background: 'Fond', layout: 'Disposition', typography: 'Typographie', focus: 'Sélection', rotation: 'Rotation', samsung: 'Samsung', inputs: 'Entrées', devices: 'Appareils', scheme: 'Apparence', sound: 'Sons', soundStyle: 'Style de son' };
   function choice(axis, value, disabled) {
     return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled,
       label: axis === 'font' ? FONTS[value].name : axis === 'mode' ? MODES.filter(function (m) { return m.id === value; })[0].name : value === 'both' ? 'Les deux' : VALUE_NAMES[value] };
@@ -914,6 +930,11 @@
     if (t.group === 'device') return [{ id: 'device', title: '', items: DEVICES.concat([['', 'Autre appareil']]).map(function (d) {
       return { action: 'device.set.' + (d[0] || 'other'), label: d[1], logo: d[0] || 'hdmi', device: d[0], active: inputEntry(t.port, S.c.devices).device === d[0] };
     }) }];
+    if (t.group === 'sound') return [{ id: 'sound', title: '', reason: 'Plus doux et moins aigus la nuit, silence au repos.', items: options('sound', LOOK_VALUES.sound).concat([
+      { action: 'sound.style', label: 'Style de son', description: VALUE_NAMES[S.c.soundStyle], chevron: true },
+      { action: 'sound.output', label: 'Sortie du son', chevron: true }
+    ]) }];
+    if (t.group === 'soundStyle') return [{ id: 'soundStyle', title: '', items: options('soundStyle', LOOK_VALUES.soundStyle).map(function (item) { item.description = STYLE_HINTS[item.value]; return item; }) }];
     if (t.group === 'background') return [
       { id: 'bg', title: 'Type de fond', items: options('bg', ['photo', 'light', 'dark']) },
       { id: 'wall', title: 'Fond d’écran', items: [{ action: 'background.wallpaper', label: wall(S.c.wall).name, thumbnail: true, disabled: flat }] },
@@ -1014,7 +1035,8 @@
     else if (item.action === 'background.wallpaper') openWallpaper();
     else if (item.action === 'background.rotation') openAppearance('rotation');
     else if (item.action === 'samsung.home') perform(samsungName(), FrameDevice.home);
-    else if (item.action === 'samsung.settings') perform('Réglages de la télé', FrameDevice.settings);
+    else if (item.action === 'samsung.settings' || item.action === 'sound.output') perform('Réglages de la télé', FrameDevice.settings);
+    else if (item.action === 'sound.style') openAppearance('soundStyle');
     else if (item.action === 'samsung.inputs') openInputs();
     else if (item.action === 'inputs.retry') loadInputs(t);
     else if (item.action === 'inputs.devices') openAppearance('devices');
@@ -1030,7 +1052,7 @@
   V.appearance = {
     norm: function (t) {
       var rows = detailRows(t), exists = false, applied = null;
-      var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', rotation: 'mode', scheme: 'scheme' }[t.group];
+      var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', rotation: 'mode', scheme: 'scheme', sound: 'sound', soundStyle: 'soundStyle' }[t.group];
       rows.forEach(function (items) { items.forEach(function (item) {
         if (item.action === t.f.action) exists = true;
         if (item.active || axis && item.axis === axis && item.value === S.c[axis]) applied = item;
@@ -1077,13 +1099,16 @@
   function press(k) {
     norm();
     duoTouch();
-    var t = top(), mark = duoPanelMark(t);
+    var t = top(), mark = duoPanelMark(t), before = duoPlace(t), asleep = duo.idle, style = S.c.soundStyle, bumped;
+    duo.bumped = false;
     if (k === 'ok') duoPanelPress(t);
     V[t.id].key(t, k);
     norm();
+    bumped = duoPanelBumps(t, mark, k);
+    duoKeySound(t, k, before, asleep, bumped || duo.bumped, style);
     render();
     syncRotation();
-    duoPanelEdge(t, mark, k);
+    if (bumped) duoPanelEdge(t, k);
   }
 
   /* ---------- Rendering ---------- */
@@ -1099,7 +1124,7 @@
   var utPlates = [$('utLens'), $('utLensAlt')], utFields = [$('utField'), $('utFieldAlt')], utPlateIndex = 0, utPlateKey = null;
   var photoMode = null, photoTransitionToken = 0;
   var sheetEl = $('sheet'), sheetView = $('sheetView');
-  var duoHome = $('duoHome'), duoFace = $('duoFace'), duoPanels = $('duoPanels'), duoToastEl = $('duoToast'), duoDate = $('duoDate'), duoClock = $('duoClock'), duoRing = $('duoRing'), duoRingInk = $('duoRingInk'), duoRow = $('duoRow'), duoCapApps = $('duoCapApps'), duoCapCtrl = $('duoCapCtrl');
+  var duoFace = $('duoFace'), duoPanels = $('duoPanels'), duoToastEl = $('duoToast'), duoVol = $('duoVol'), duoDate = $('duoDate'), duoClock = $('duoClock'), duoRing = $('duoRing'), duoRingInk = $('duoRingInk'), duoRow = $('duoRow'), duoCapApps = $('duoCapApps'), duoCapCtrl = $('duoCapCtrl');
   var duoLens = $('duoLens'), duoItems = $('duoItems'), duoPill = $('duoPill'), duoPillField = $('duoPillField'), duoPillLabel = $('duoPillLabel');
   var IMG = { photo: $('photo'), mat: $('matImg'), bg: $('sheetBg'), field: $('phFieldImg'), fieldAlt: $('phFieldImgAlt'), utility: $('utFieldImg'), utilityAlt: $('utFieldImgAlt'), duoDay: $('duoDayImg'), duoNight: $('duoNightImg') };
   var sheetKey = '', slotEls = {}, dockEdgeFrame = 0, dockEdgeUntil = 0, dockAnchorCenter = 960;
@@ -1133,7 +1158,8 @@
   function render() {
     var t = top(), sheet = !!V[t.id].sheet, shown = wall(S.shown ? S.shown.wall : S.c.wall), palette = ADAPTIVE_INK[shown.id];
     var adaptive = applyAdaptiveInk(palette), tr = adaptive && palette.tr ? palette.tr.pol : shown.ut.tr, br = adaptive && palette.br ? palette.br.pol : shown.ut.br, duoCards = S.c.layout === 'duo';
-    if (duoCards) syncNight(duo.level < 0 ? 0 : DUO_FADE_MS);
+    if (duoCards) { syncNight(duo.level < 0 ? 0 : DUO_FADE_MS); syncSound(); }
+    syncVolumeKeys();
     stage.className = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + (S.c.layout === 'duo' ? ' sch-' + duo.scheme : '') + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + (duoCards ? '' : ' at-' + t.id) + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet && !duoCards ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '');
     if (!adaptive && shown.clockInk) stage.style.setProperty('--clock-ink', shown.clockInk);
     else stage.style.removeProperty('--clock-ink');
@@ -1274,9 +1300,10 @@
   /* The glass is baked for each capsule size and each thing that moves is an image on its own layer:
      navigation only changes transform and opacity, and the day and night images only cross-fade. */
   var DUO_ROW = { pitch: 116, pad: 10, h: 136, gap: 28, y: 884 }, DUO_CENTER_Y = DUO_ROW.y + DUO_ROW.h / 2, DUO_CAP_TOP = 158, DUO_ICON = 106, DUO_REST = .877;
+  var DUO_VOL = { x: 80, y: 80, track: 228, shown: 2200 };
   var DUO_IDLE_MS = 20000, DUO_FADE_MS = 1200, DUO_FILES = 'assets/duo/', DUO_LENS = 164;
   var DUO_DAYS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'], DUO_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-  var duo = { built: false, rowKey: null, level: -1, scheme: 'day', focus: null, idle: false, idleTimer: 0, slots: [], apps: [], controls: [], text: null, tempEl: null, widths: {}, card: null, errShown: null, pendingShown: false, toastTimer: 0 };
+  var duo = { built: false, rowKey: null, level: -1, scheme: 'day', focus: null, idle: false, idleTimer: 0, slots: [], apps: [], controls: [], text: null, tempEl: null, widths: {}, card: null, errShown: null, pendingShown: false, toastTimer: 0, connected: null, bumped: false, volume: null, volumeTimer: 0 };
 
   /* Altitude of the sun in degrees, from the usual low-precision formulas. */
   function sunAltitude(date, lat, lon) {
@@ -1299,7 +1326,7 @@
   function syncNight(ms) {
     var level = nightLevel(), name = level >= .5 ? 'night' : 'day', list, i;
     if (level !== duo.level) {
-      list = duoHome.querySelectorAll('.duo-night');
+      list = stage.querySelectorAll('.duo-night');
       for (i = 0; i < list.length; i++) {
         list[i].style.transition = ms ? 'opacity ' + ms + 'ms linear' : 'none';
         list[i].style.opacity = level;
@@ -1327,6 +1354,15 @@
       + '<svg class="duo-weather" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round">' + SVG.cloud + '</svg><div class="duo-temp"></div>';
     duo.tempEl = duoRingInk.querySelector('.duo-temp');
     duoLens.innerHTML = duoPair(DUO_FILES + 'ui/lens-{s}.webp', 'width:' + DUO_LENS + 'px;height:' + DUO_LENS + 'px;');
+    box = DUO.glass.vol;
+    duoVol.style.width = box.w + 'px'; duoVol.style.height = box.h + 'px';
+    duoVol.innerHTML = duoPair(DUO_FILES + 'glass/vol-{s}.webp', 'position:absolute;left:0;top:0;width:' + box.w + 'px;height:' + box.h + 'px;')
+      + '<div class="duo-vol-ink" style="left:' + (DUO_VOL.x - box.x) + 'px;top:' + (DUO_VOL.y - box.y) + 'px"><div class="duo-vol-icon"></div><div class="duo-vol-track"><div class="duo-mover duo-vol-fill"></div></div><span class="duo-vol-value"></span></div>';
+    duo.volIcon = duoVol.querySelector('.duo-vol-icon');
+    duo.volFill = duoVol.querySelector('.duo-vol-fill');
+    duo.volValue = duoVol.querySelector('.duo-vol-value');
+    M.set(duoVol, { x: box.x, y: box.y, o: 0, s: .97 });
+    M.set(duo.volFill, { x: -DUO_VOL.track });
     M.set(duoRow, { y: 0, o: 1 });
     // The names and the date are measured in this face, so measure again once it is here.
     if (document.fonts && document.fonts.load) document.fonts.load('600 42px "Duo Geist"').then(function () { duo.widths = {}; if (S.c.layout === 'duo') render(); }, function () {});
@@ -1483,6 +1519,7 @@
       if (next < 0 || next >= h.length + U.length) {
         duoNudge(duoLens, 'x', k === 'left' ? -12 : 12);
         duoNudge(f.zone === 'util' ? duo.controls[f.u] : duo.apps[i], 'x', k === 'left' ? -12 : 12);
+        duo.bumped = true;
         return;
       }
       if (next < h.length) { f.zone = 'apps'; setSel(h[next]); }
@@ -1811,18 +1848,103 @@
     else if (t.id === 'editor') { if (f.zone === 'head') M.press(card.tops[f.h]); }
     else if (t.id !== 'home' && card.index >= 0) M.press(card.plate);
   }
-  function duoPanelEdge(t, mark, k) {
+  /* A key that moved nothing has reached the end of what the card holds. */
+  function duoPanelBumps(t, mark, k) {
+    var vertical = k === 'up' || k === 'down', f = t.f;
+    if (mark === null || !t.duoCard || top() !== t || k === 'ok' || k === 'back' || duoPanelMark(t) !== mark) return false;
+    if (t.id === 'apps') return f.zone === 'grid';
+    if (t.id === 'editor') return f.zone !== 'head' && (!t.lifted || vertical);
+    return vertical && t.duoCard.index >= 0;
+  }
+  function duoPanelEdge(t, k) {
     var card = t.duoCard, f = t.f, sign = k === 'up' || k === 'left' ? -1 : 1, axis = k === 'up' || k === 'down' ? 'y' : 'x';
-    if (mark === null || !card || top() !== t || k === 'ok' || k === 'back' || duoPanelMark(t) !== mark) return;
-    if (t.id === 'apps') { if (f.zone === 'grid') duoNudge(card.lens, axis, sign * 8); }
+    if (t.id === 'apps') duoNudge(card.lens, axis, sign * 8);
     else if (t.id === 'editor') {
-      if (f.zone === 'head') return;
-      if (t.lifted) {
-        if (axis === 'y') { duoNudge(card.lines[t.lifted.order[f.i]], 'y', sign * 8); duoNudge(card.plate, 'y', sign * 8); }
-        return;
-      }
-      duoNudge(f.zone === 'home' && f.part === 'remove' ? card.dot : card.plate, axis, sign * 8);
-    } else if (axis === 'y' && card.index >= 0) duoNudge(card.plate, 'y', sign * 8);
+      if (t.lifted) { duoNudge(card.lines[t.lifted.order[f.i]], 'y', sign * 8); duoNudge(card.plate, 'y', sign * 8); }
+      else duoNudge(f.zone === 'home' && f.part === 'remove' ? card.dot : card.plate, axis, sign * 8);
+    } else duoNudge(card.plate, 'y', sign * 8);
+  }
+
+  /* ---------- Duo sounds ---------- */
+  function duoSound(name, options) { if (S.c.layout === 'duo' && !document.hidden) Sound.play(name, options); }
+  function syncSound() {
+    Sound.setLevel(S.c.sound);
+    Sound.setNight(duo.scheme === 'night');
+    Sound.setFamily(S.c.soundStyle);
+  }
+  /* Where the selection is, from 0 to 1 across the screen, and its note: one place always gives the same sound. */
+  function duoPlace(t) {
+    var f = t.f, area, index, cx, first, last, col, rows;
+    if (S.c.layout !== 'duo') return null;
+    if (t.id === 'home') {
+      area = f.zone === 'util' ? 'controls' : 'apps';
+      index = area === 'apps' ? Math.max(0, ensureSel()) : clamp(f.u, 0, utils().length - 1);
+      cx = duoSlot(area, index); first = duoSlot('apps', 0); last = duoSlot('controls', utils().length - 1);
+      return { id: area + index, zone: area, x: cx / 1920, note: (cx - first) / (last - first) * 7 };
+    }
+    if (t.id === 'apps') {
+      if (f.zone === 'head') return { id: 'top', zone: 'top', x: .86, note: 6 };
+      col = f.i % COLS;
+      return { id: f.i, zone: 'grid', x: (180 + DUO_GRID.left + col * DUO_GRID.w + DUO_GRID.w / 2) / 1920, note: col + 1 };
+    }
+    if (t.id === 'editor') {
+      if (f.zone === 'head') return { id: 'top' + f.h, zone: 'top', x: .86, note: 6 };
+      index = f.zone === 'other' ? f.j : f.i;
+      return { id: f.zone + (f.zone === 'home' ? f.part : '') + index, zone: f.zone, x: f.zone === 'home' ? .3 : .68, note: clamp(6 - Math.round(index * .7), 1, 6) };
+    }
+    // In a list, the top is higher than the bottom.
+    rows = t.id === 'settings' ? settingsIds() : t.id === 'message' ? messageContent(t).actions : detailRows(t);
+    index = t.id === 'settings' ? rows.indexOf(f.id) : t.id === 'message' ? f.b : detailLocation(t).row;
+    return { id: index, zone: 'list', x: .5, note: 2 + (1 - index / Math.max(1, rows.length - 1)) * 4 };
+  }
+  /* The sound follows what the key really did, and leaves before the drawing. */
+  function duoKeySound(t, k, before, asleep, bumped, style) {
+    var now = top(), after;
+    if (!before || S.c.layout !== 'duo') return;
+    // A new style answers in its own voice, as soon as it is here.
+    if (S.c.soundStyle !== style && !Sound.setFamily(S.c.soundStyle, function () { duoSound('ok'); })) return;
+    if (asleep) { if (!duo.idle) duoSound('wake'); return; }
+    if (S.note === FULL || S.note === LAST) { duoSound('error'); return; }
+    if (now !== t) duoSound(S.stack.indexOf(t) >= 0 ? 'panelIn' : 'panelOut');
+    if (k === 'ok' || k === 'back') { duoSound(k, { x: before.x }); return; }
+    if (bumped) { if (!S.keyRepeat) duoSound('edge', { x: before.x }); return; }
+    if (now !== t) return;
+    after = duoPlace(now);
+    if (after.id !== before.id) duoSound(after.zone === before.zone ? 'select' : 'switch', { x: after.x, note: after.note });
+  }
+
+  /* ---------- Volume ---------- */
+  /* The glass is baked for this place, so the pill appears in it with a fade and does not slide. */
+  var volumeCodes = null, volumeWanted = false;
+  function syncVolumeKeys() {
+    var wanted = S.c.layout === 'duo';
+    if (wanted === volumeWanted) return;
+    volumeWanted = wanted;
+    volumeCodes = FrameDevice.catchVolumeKeys(wanted);
+    if (wanted) readVolume();
+  }
+  function readVolume() {
+    duo.volume = FrameDevice.volume();
+    if (duo.volume) Sound.setMuted(duo.volume.muted || !duo.volume.level);
+  }
+  function showVolume() {
+    var v = duo.volume, silent = v.muted || !v.level;
+    duoBuild();
+    duo.volIcon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + SVG[silent ? 'mute' : 'speaker'] + '</svg>';
+    duo.volValue.textContent = v.muted ? 'Coupé' : v.level;
+    M.to(duo.volFill, { x: (v.muted ? 0 : v.level / 100) * DUO_VOL.track - DUO_VOL.track }, 'select');
+    M.to(duoVol, { o: 1, s: 1 }, 'panelIn');
+    clearTimeout(duo.volumeTimer);
+    duo.volumeTimer = setTimeout(function () { M.to(duoVol, { o: 0, s: .985 }, 'panelOut'); }, DUO_VOL.shown);
+  }
+  /* If the TV refuses, the keys go back to it, and with them its own banner. */
+  function volumeKey(action) {
+    duo.volume = FrameDevice.changeVolume(action);
+    duoTouch();
+    if (!duo.volume) { FrameDevice.catchVolumeKeys(false); volumeCodes = null; return; }
+    Sound.setMuted(duo.volume.muted || !duo.volume.level);
+    showVolume();
+    duoSound('select', { x: DUO_VOL.x / 1920, note: duo.volume.level / 100 * 7 });
   }
 
   function dockGeom(n) {
@@ -2564,6 +2686,7 @@
   document.addEventListener('keydown', function (ev) {
     var code = ev.keyCode, k = KEYS[code];
     if (code === 9) { ev.preventDefault(); return; }
+    if (volumeCodes && volumeCodes[code]) { ev.preventDefault(); volumeKey(volumeCodes[code]); return; }
     if (!k || ev.metaKey || ev.ctrlKey || ev.altKey) return;
     ev.preventDefault();
     if (k === 'ok' || k === 'back') { if (ev.repeat || heldKeys[code]) return; heldKeys[code] = true; }
@@ -2581,6 +2704,7 @@
       release();
       if (S.c.bg === 'photo' && !S.pending && !S.previewBundle && (!committedBundle || S.bundleKey !== bundleKey(S.c))) setLook({}, { transient: true, startup: true });
       setDuoIdle(false); duoTouch();
+      if (S.c.layout === 'duo') readVolume();
       refreshInputsOnReturn(); after(); updateClock(); focusStage(); refreshCatalog();
     }
   });
@@ -2626,4 +2750,5 @@
   setLook({}, { transient: true, startup: true });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); duoTouch();
   if (!document.hidden) refreshCatalog();
+  FrameDevice.watchSources(function () { if (!document.hidden && S.c.layout === 'duo') refreshSources(true); });
 })();
