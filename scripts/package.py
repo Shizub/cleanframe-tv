@@ -86,7 +86,8 @@ def build_unsigned(root=ROOT):
     """For a signing route of the owner's choice: no SDK, no certificate, no TV."""
     (root / 'dist').mkdir(exist_ok=True)
     unsigned = root / 'dist/CleanFrame-unsigned.wgt'
-    write_widget_archive(unsigned, root=root, identity=load_settings(root)['identity'])
+    settings = load_settings(root)
+    write_widget_archive(unsigned, root=root, identity=settings['identity'], floor=settings['required_version'])
     print('Unsigned widget created: ' + str(unsigned))
     print('It can hold private fonts and the Duo files: keep it private.')
 
@@ -100,7 +101,7 @@ def main(root=ROOT):
     dist = root / 'dist'
     dist.mkdir(exist_ok=True)
     unsigned = dist / 'CleanFrame-unsigned.wgt'
-    write_widget_archive(unsigned, root=root, identity=settings['identity'])
+    write_widget_archive(unsigned, root=root, identity=settings['identity'], floor=settings['required_version'])
     # A fresh folder prevents a previous signed widget masking a failed build.
     signed_dir = Path(tempfile.mkdtemp(prefix='signed-', dir=dist))
     command = [str(cli), 'package', '-t', 'wgt', '-s', settings['profile'], '-o', str(signed_dir), '--', str(unsigned)]

@@ -82,6 +82,21 @@ class ToolTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'ten-character'):
             load_settings(self.root)
 
+    def test_owner_floor_lowers_only_the_generated_manifest(self):
+        original = (self.root / 'app/config.xml').read_bytes()
+        self.assertIsNone(self.config(profile='Synthetic profile')['required_version'])
+        settings = self.config(profile='Synthetic profile', required_version='4.0')
+        self.assertEqual(settings['required_version'], '4.0')
+        output = self.root / 'widget.wgt'
+        write_widget_archive(output, root=self.root, include_private=False, identity=settings['identity'], floor='4.0')
+        with zipfile.ZipFile(output) as archive:
+            self.assertEqual(archive.read('config.xml'), original.replace(b'required_version="5.0"', b'required_version="4.0"'))
+        self.assertEqual((self.root / 'app/config.xml').read_bytes(), original)
+        # It can only lower the source floor, and Tizen 4.0 is the oldest owner experiment.
+        for floor in ['3.0', '5.5', '9.0', '4', 'four', '', 4.0]:
+            with self.subTest(floor=floor), self.assertRaises(ValueError):
+                self.config(profile='Synthetic profile', required_version=floor)
+
     def test_password_permissions_paths_and_contents(self):
         good = self.password()
         self.assertEqual(read_password(good, self.root), b'synthetic password')

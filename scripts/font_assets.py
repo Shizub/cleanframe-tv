@@ -8,7 +8,7 @@ from pathlib import Path
 import json
 import re
 import zipfile
-from local_config import override_identity
+from local_config import override_floor, override_identity
 from private_files import check_widget, generated_path, private_path, secret_content
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,12 +86,17 @@ def font_overlay(root=ROOT, include_private=True):
     return assets
 
 
-def write_widget_archive(output, root=ROOT, include_private=True, identity=None):
+def write_widget_archive(output, root=ROOT, include_private=True, identity=None, floor=None):
     """Create an unsigned archive without reading signing or device settings."""
     app = root / 'app'
     overlay = font_overlay(root, include_private)
-    if identity is not None:
-        overlay['config.xml'] = override_identity((app / 'config.xml').read_bytes(), identity)
+    if identity is not None or floor is not None:
+        manifest = (app / 'config.xml').read_bytes()
+        if identity is not None:
+            manifest = override_identity(manifest, identity)
+        if floor is not None:
+            manifest = override_floor(manifest, floor)
+        overlay['config.xml'] = manifest
     with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED, allowZip64=False) as package:
         for source in sorted(app.rglob('*')):
             name = source.relative_to(app).as_posix()

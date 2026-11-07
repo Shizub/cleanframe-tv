@@ -42,6 +42,25 @@ def override_identity(data, identity):
     return result
 
 
+def override_floor(data, floor):
+    """Lower only the installation floor, for an owner's older TV; retain the other manifest bytes."""
+    if not isinstance(floor, str) or not re.fullmatch(r'\d+\.\d+', floor):
+        raise ValueError('required_version must be a Tizen version such as 4.0.')
+    tags = list(re.finditer(rb'<tizen:application\b[^>]*>', data))
+    if len(tags) != 1:
+        raise ValueError('Expected one tizen:application tag in the source manifest.')
+    tag = tags[0].group()
+    pattern = rb'(?<![\w:.-])(required_version\s*=\s*)([\"\'])([^\"\']*)\2'
+    found = re.findall(pattern, tag)
+    if len(found) != 1:
+        raise ValueError('Expected one required_version attribute in the application tag.')
+    version = lambda text: tuple(int(part) for part in text.split('.'))
+    if not version('4.0') <= version(floor) <= version(found[0][2].decode()):
+        raise ValueError('required_version can only lower the source floor, and not below 4.0.')
+    tag = re.sub(pattern, lambda match: match[1] + match[2] + floor.encode() + match[2], tag)
+    return data[:tags[0].start()] + tag + data[tags[0].end():]
+
+
 def validate_identity(identity):
     package = identity.get('package_id')
     app = identity.get('app_id')
@@ -67,7 +86,7 @@ def load_settings(root=ROOT):
             config = json.loads(path.read_text())
         except (ValueError, OSError):
             raise ValueError('Cannot read .local/signing.json as JSON.') from None
-    allowed = {'sdk_path', 'profile', 'password_file', 'package_id', 'app_id'}
+    allowed = {'sdk_path', 'profile', 'password_file', 'package_id', 'app_id', 'required_version'}
     if not isinstance(config, dict) or set(config) - allowed:
         raise ValueError('Unknown signing setting. See signing.example.json; do not put passwords in JSON.')
     if path.exists() and 'profile' not in config:
@@ -81,11 +100,15 @@ def load_settings(root=ROOT):
     if 'package_id' in config:
         identity = {key: config[key] for key in ['package_id', 'app_id']}
         validate_identity(identity)
+    floor = config.get('required_version')
+    if floor is not None:
+        # Rejected here, before any packaging; the source manifest keeps its own floor.
+        override_floor((root / 'app/config.xml').read_bytes(), floor)
     legacy_password = root / '.local/certificates/private/certificate-password.txt'
     # Only an absent config enables the original maintainer password-file default.
     password = config.get('password_file') if path.exists() else (str(legacy_password) if legacy_password.exists() else None)
     return {'sdk_path': local_path(config.get('sdk_path', '.local/tizen-sdk'), root).resolve(),
-            'profile': profile, 'identity': identity,
+            'profile': profile, 'identity': identity, 'required_version': floor,
             'password_file': local_path(password, root) if password is not None else None}
 
 
