@@ -467,17 +467,20 @@
   }
 
   var busy = false, busyTimer = 0;
-  function release() { busy = false; clearTimeout(busyTimer); S.press = null; }
+  function release() { busy = false; clearTimeout(busyTimer); S.press = null; duoOpening(null); }
   function message(title, line, note) {
     push({ id: 'message', msg: 'error', content: { title: title, line: line, note: note || '', actions: [['back', 'Retour']] }, f: { b: 0 } });
   }
-  function perform(title, run) {
+  /* An app can take seconds to appear after the TV accepts it (the TV's own YouTube does). With hold, CleanFrame
+     stays busy until it is hidden, at most until busyTimer, so a second press does not open it again. */
+  function perform(title, run, hold) {
     var place;
     if (busy) return;
     busy = true; busyTimer = setTimeout(release, 10000);
     place = duoPlace(top());
     if (place) duoSound('launch', { x: place.x });
     run(function (err) {
+      if (!err && hold && !document.hidden && busy) { duoOpening(S.press); return; }
       release();
       if (err) { message(title, err.message || 'La télé n’a pas pu ouvrir cet écran.', err.detail || ''); duoSound('error'); }
       render(); syncRotation();
@@ -491,7 +494,7 @@
     perform(a.name, function (done) {
       if (!a.port) { FrameDevice.launchApp(a.appId, done); return; }
       FrameDevice.setSource(a.input, function (err) { done(!document.hidden && !(err && err.cancelled) ? err : null); });
-    });
+    }, !a.port);
   }
   /* Home follows the TV: an app that has gone leaves the row, and a new one only joins All apps. A source is a port, so it stays. */
   function syncHome(installed) {
@@ -1304,7 +1307,7 @@
   var DUO_VOL = { x: 80, y: 80, track: 228, shown: 2200 }, DUO_ARRIVAL_MS = 2500, DUO_AUDIO_MS = 1200, DUO_FONT = '600 42px "Duo Geist"';
   var DUO_IDLE_MS = 20000, DUO_FADE_MS = 1200, DUO_FILES = 'assets/duo/', DUO_LENS = 164;
   var DUO_DAYS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'], DUO_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-  var duo = { built: false, rowKey: null, level: -1, scheme: 'day', focus: null, idle: false, idleTimer: 0, slots: [], apps: [], controls: [], text: null, tempEl: null, widths: {}, card: null, errShown: null, pendingShown: false, toastTimer: 0, connected: null, bumped: false, volume: null, volumeTimer: 0 };
+  var duo = { built: false, rowKey: null, level: -1, scheme: 'day', focus: null, idle: false, idleTimer: 0, slots: [], apps: [], controls: [], text: null, tempEl: null, widths: {}, opening: null, card: null, errShown: null, pendingShown: false, toastTimer: 0, connected: null, bumped: false, volume: null, volumeTimer: 0 };
 
   /* Altitude of the sun in degrees, from the usual low-precision formulas. */
   function sunAltitude(date, lat, lon) {
@@ -1465,6 +1468,14 @@
     duoItems.innerHTML = '';
     duo.apps = S.c.home.map(function (id, i) { return duoItem('duo-app', 'app', i, 'home.app.' + id, app(id).name, duoIcon(app(id)), 'apps'); });
     duo.controls = utils().map(function (u, i) { return duoItem('duo-control', 'util', i, 'util.' + u, duoUtilName(u), '<img alt="" src="' + DUO_FILES + 'ui/glyph-' + u + '.webp">', 'controls'); });
+  }
+  /* The icon of an app that is opening breathes until the app takes over. */
+  function duoOpening(id) {
+    var i = id && S.c.layout === 'duo' ? S.c.home.indexOf(id) : -1;
+    if (duo.opening) { duo.opening.className = duo.opening.className.replace(' is-opening', ''); duo.opening = null; }
+    if (i < 0 || !duo.apps[i]) return;
+    duo.opening = duo.apps[i];
+    duo.opening.className += ' is-opening';
   }
   function duoUtilName(u) { return u === 'samsung' ? samsungName() : UTIL[u][0]; }
   function duoSyncFocus(hs) {

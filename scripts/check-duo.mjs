@@ -280,6 +280,15 @@ try {
     await nav(page, 'ok'); await settled(page);
     check('OK launches the selected app', (await tv(page)).launched.pop() === '9Ur5IzDKqV.TizenYouTube', await tv(page));
     check('the launched app is remembered', (await state(page)).lastApp === 'youtube');
+    const opening = () => page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('.duo-app.is-opening'), el => el.getAttribute('aria-label')));
+    check('until the app takes over, its icon breathes', JSON.stringify(await opening()) === '["YouTube"]', await opening());
+    const launches = (await tv(page)).launched.length;
+    await nav(page, 'ok'); await settled(page);
+    check('a second OK meanwhile opens nothing more', (await tv(page)).launched.length === launches, (await tv(page)).launched);
+    // On the TV the app takes the screen: CleanFrame is hidden, then comes back.
+    await page.evaluate(() => { window.__hidden = true; document.dispatchEvent(new Event('visibilitychange')); window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); });
+    await settled(page);
+    check('back from the app, the icon is still', (await opening()).length === 0, await opening());
 
     await openFromHome(page, 'util.art');
     check('Art Mode asks the Art app', (await tv(page)).controls.some(c => c.id === 'org.tizen.art-app' && c.data.includes('mode=fullscreen')), await tv(page));
