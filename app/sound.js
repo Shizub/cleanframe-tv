@@ -23,7 +23,11 @@
   var ctx = null, filter = null, master = null, active = {}, lastClick = -1, streak = 0, played = [];
 
   function toBuffer(samples, from, count, rate) {
-    var buffer = new root.AudioBuffer({ length: count, numberOfChannels: 1, sampleRate: rate }), channel = buffer.getChannelData(0), i;
+    var buffer, channel, i;
+    // An older engine has no AudioBuffer constructor, only the context's factory.
+    try { buffer = new root.AudioBuffer({ length: count, numberOfChannels: 1, sampleRate: rate }); }
+    catch (err) { if (!ctx && !open()) throw err; buffer = ctx.createBuffer(1, count, rate); }
+    channel = buffer.getChannelData(0);
     for (i = 0; i < count; i++) channel[i] = samples[from + i] / 32768;
     return buffer;
   }
@@ -42,10 +46,17 @@
     var samples = new root.Int16Array(data), sounds = {}, hear = waiting;
     loading[name] = false;
     if (name !== family) return;
-    Object.keys(entry.sounds).forEach(function (key) {
-      var range = entry.sounds[key], rate = root.CleanFrameSounds.rate;
-      sounds[key] = method === 'web' ? toBuffer(samples, range[0], range[1], rate) : toElement(data, range[0], range[1], rate);
-    });
+    try {
+      Object.keys(entry.sounds).forEach(function (key) {
+        var range = entry.sounds[key], rate = root.CleanFrameSounds.rate;
+        sounds[key] = method === 'web' ? toBuffer(samples, range[0], range[1], rate) : toElement(data, range[0], range[1], rate);
+      });
+    } catch (err) {
+      // Web Audio cannot make these sounds here: the audio element tries next, then Samsung's beeps.
+      if (method === 'web') { use(root.Audio && root.Blob && root.URL ? 'element' : 'beep'); return; }
+      lost(name);
+      return;
+    }
     banks = {};
     banks[name] = sounds;
     waiting = null;
@@ -151,22 +162,27 @@
       wake();
     }
     hush(voice);
-    source = ctx.createBufferSource();
-    amp = ctx.createGain();
-    pan = ctx.createStereoPanner();
-    self = { source: source, amp: amp };
-    source.buffer = buffer;
-    amp.gain.value = gain;
-    pan.pan.value = (x - 0.5) * 2 * PAN;
-    source.connect(amp);
-    amp.connect(pan);
-    pan.connect(filter);
-    source.onended = function () {
-      amp.disconnect();
-      pan.disconnect();
-      if (active[voice] === self) delete active[voice];
-    };
-    source.start(ctx.currentTime);
+    try {
+      source = ctx.createBufferSource();
+      amp = ctx.createGain();
+      // Without a stereo panner the sound stays centred.
+      pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+      self = { source: source, amp: amp };
+      source.buffer = buffer;
+      amp.gain.value = gain;
+      source.connect(amp);
+      if (pan) {
+        pan.pan.value = (x - 0.5) * 2 * PAN;
+        amp.connect(pan);
+        pan.connect(filter);
+      } else amp.connect(filter);
+      source.onended = function () {
+        amp.disconnect();
+        if (pan) pan.disconnect();
+        if (active[voice] === self) delete active[voice];
+      };
+      source.start(ctx.currentTime);
+    } catch (err) { return false; }
     active[voice] = self;
     return true;
   }

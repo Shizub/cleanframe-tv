@@ -41,7 +41,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .duo-control>img{left:16px;top:16px;width:74px;height:74px}
 .duo-tile{position:absolute;left:0;top:0;width:106px;height:106px;border-radius:53px;overflow:hidden;background:rgba(255,255,255,.22);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.26);text-align:center;font-size:40px;line-height:106px;font-weight:600}
 .duo-home .duo-tile img{width:106px;height:106px}
-.duo-pill{height:56px;clip-path:inset(0 round 28px);white-space:nowrap}
+.duo-pill{height:56px;overflow:hidden;border-radius:28px;-webkit-clip-path:inset(0 round 28px);clip-path:inset(0 round 28px);white-space:nowrap}
 .duo-home .duo-pill-field{width:1920px;height:1080px}
 .duo-pill-tint,.duo-pill-rim{position:absolute;left:0;top:0;right:0;bottom:0}
 .sch-day .duo-pill-tint{background:rgba(58,46,30,.26)}
@@ -58,17 +58,18 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .duo-vol-ink{position:absolute;width:440px;height:64px;white-space:nowrap}
 .duo-vol-icon{position:absolute;left:26px;top:15px;width:34px;height:34px}
 .duo-vol-icon svg{display:block;width:34px;height:34px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.duo-vol-track{position:absolute;left:76px;top:28px;width:228px;height:8px;background:rgba(255,255,255,.34);clip-path:inset(0 round 4px)}
+.duo-vol-track{position:absolute;left:76px;top:28px;width:228px;height:8px;background:rgba(255,255,255,.34);overflow:hidden;border-radius:4px;-webkit-clip-path:inset(0 round 4px);clip-path:inset(0 round 4px)}
 .duo-vol-fill{width:228px;height:8px;background:#fff}
 .duo-vol-value{position:absolute;right:28px;top:0;line-height:64px;font-size:30px;font-weight:600;color:#fff;font-feature-settings:"tnum" 1}
 .duo-panels{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;font-size:32px;line-height:1.2;pointer-events:none}
-.duo-card{clip-path:inset(0 round 56px);overflow:hidden;pointer-events:auto;transform-origin:50% 50%}
+.duo-card{border-radius:56px;-webkit-clip-path:inset(0 round 56px);clip-path:inset(0 round 56px);overflow:hidden;pointer-events:auto;transform-origin:50% 50%}
 .duo-card.is-leaving{pointer-events:none}
 .duo-card img{display:block;max-width:none}
 .duo-card-field{position:absolute;left:0;top:0;width:1920px;height:1080px}
 .duo-card-tint,.duo-card-rim,.duo-card-content{position:absolute;left:0;top:0;right:0;bottom:0}
+.duo-card-tint{border-radius:56px}
 .duo-card-rim{border-radius:56px;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.34)}
-.duo-card-sheen{position:absolute;left:0;top:0;right:0;height:120px;background:linear-gradient(rgba(255,255,255,.20),rgba(255,255,255,0))}
+.duo-card-sheen{position:absolute;left:0;top:0;right:0;height:120px;border-radius:56px 56px 0 0;background:linear-gradient(rgba(255,255,255,.20),rgba(255,255,255,0))}
 .sch-day .duo-card{color:#17171b}
 .sch-day .duo-card-tint{background:linear-gradient(rgba(255,255,255,.70),rgba(255,255,255,.60))}
 .sch-night .duo-card{color:#f6f6f8}
@@ -102,7 +103,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .duo-top-button.is-focus .duo-top-light{opacity:1;transform:none}
 .duo-top-button.is-dim{opacity:.42}
 .duo-status{position:absolute;left:64px;right:64px;top:400px;text-align:center;font-size:32px;line-height:44px;opacity:.72}
-.duo-grid-window{position:absolute;left:0;top:150px;right:0;bottom:0;overflow:hidden;clip-path:inset(0)}
+.duo-grid-window{position:absolute;left:0;top:150px;right:0;bottom:0;overflow:hidden;-webkit-clip-path:inset(0);clip-path:inset(0)}
 .duo-grid{width:1560px}
 .duo-grid-lens{width:168px;height:168px;border-radius:84px;background:rgba(255,255,255,.88);box-shadow:0 8px 26px rgba(0,0,0,.16)}
 .sch-day .duo-grid-lens{background:rgba(255,255,255,.92)}
@@ -118,7 +119,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .duo-column-title{position:absolute;top:128px;font-size:28px;line-height:36px;font-weight:600;opacity:.66;white-space:nowrap}
 .duo-count{display:inline-block}
 .duo-edit-status{position:absolute;left:804px;right:64px;top:176px;font-size:28px;line-height:36px;opacity:.66}
-.duo-editor-window{position:absolute;left:0;right:0;top:160px;bottom:36px;overflow:hidden;clip-path:inset(0);z-index:2}
+.duo-editor-window{position:absolute;left:0;right:0;top:160px;bottom:36px;overflow:hidden;-webkit-clip-path:inset(0);clip-path:inset(0);z-index:2}
 .duo-eplate{width:680px;height:72px;border-radius:36px;z-index:2}
 .duo-edot{width:60px;height:60px;border-radius:30px;z-index:2}
 .duo-lift{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:36px;box-shadow:0 8px 28px rgba(0,0,0,.24);opacity:0;transition:opacity .18s linear}

@@ -541,6 +541,7 @@
       });
       ALPHA.sort(function (a, b) { return app(a).name.toLowerCase().localeCompare(app(b).name.toLowerCase()); });
       catalog.loaded = true; catalog.error = null; catalog.revision++;
+      if (DUO) duoPreloadIcons();
       syncHome(installed);
       if (top().id === 'apps' && oldFocus && appsItems().indexOf(oldFocus) >= 0) top().f.i = appsItems().indexOf(oldFocus);
       norm(); render();
@@ -1419,13 +1420,28 @@
     el.innerHTML = duoPair(DUO_FILES + 'glass/' + id + '-{s}.webp', 'width:' + box.w + 'px;height:' + box.h + 'px;');
   }
   /* A known service has a baked icon; another app keeps its own icon, or its initials. */
-  function duoIcon(a) {
-    var key = a.brand || a.id, words = a.name.split(/\s+/);
+  function duoIconKey(a) {
+    var key = a.brand || a.id;
     if (DUO.icons.indexOf(key) < 0) key = a.name.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (key === 'max') key = 'hbomax';
-    if (DUO.icons.indexOf(key) >= 0) return '<img alt="" src="' + DUO_FILES + 'icons/' + key + '.webp">';
+    return DUO.icons.indexOf(key) >= 0 ? key : null;
+  }
+  function duoIcon(a) {
+    var key = duoIconKey(a), words = a.name.split(/\s+/);
+    if (key) return '<img alt="" src="' + DUO_FILES + 'icons/' + key + '.webp">';
     return '<span class="duo-tile"><span>' + esc((words[0].charAt(0) + (words.length > 1 ? words[1].charAt(0) : '')).toUpperCase()) + '</span>'
       + (a.icon ? '<img alt="" src="' + esc(a.icon) + '">' : '') + '</span>';
+  }
+  /* Every icon is fetched once the TV's list is read, so All apps and the editor open with their icons. */
+  var duoIconCache = {};
+  function duoPreloadIcons() {
+    ALPHA.forEach(function (id) {
+      var a = app(id), key = duoIconKey(a), src = key ? DUO_FILES + 'icons/' + key + '.webp' : a.icon, im;
+      if (!src || duoIconCache[src]) return;
+      im = new Image();
+      im.src = src;
+      duoIconCache[src] = im;
+    });
   }
   function duoBindTiles(root) {
     Array.prototype.forEach.call(root.querySelectorAll('.duo-tile img'), function (img) { img.onerror = function () { img.style.display = 'none'; }; });
