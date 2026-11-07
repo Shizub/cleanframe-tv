@@ -76,6 +76,28 @@ test('regional streaming apps stay distinct and system helpers stay hidden', () 
   assert.equal(apps.find(a => a.name === 'HBO Max').brand, 'hbomax');
 });
 
+test('the TV\'s own YouTube takes the YouTube tile, since it holds the signed-in account', () => {
+  for (const order of [0, 1]) {
+    const h = harness();
+    let apps;
+    h.device.apps((error, value) => { assert.equal(error, null); apps = value; });
+    const list = [
+      { id: '9Ur5IzDKqV.TizenYouTube', name: 'YouTube', show: true },
+      { id: 'com.samsung.tv.cobalt-yt', name: 'Youtube', show: true },
+      { id: 'com.samsung.tv.cobalt-ytkids', name: 'YoutubeKids', show: true }
+    ];
+    h.requests[0].ok(order ? list.slice().reverse() : list);
+    const tubes = apps.filter(a => a.brand === 'youtube');
+    assert.equal(tubes.length, 1);
+    assert.equal(tubes[0].appId, 'com.samsung.tv.cobalt-yt');
+  }
+  const h = harness();
+  let apps;
+  h.device.apps((error, value) => { assert.equal(error, null); apps = value; });
+  h.requests[0].ok([{ id: '9Ur5IzDKqV.TizenYouTube', name: 'YouTube', show: true }]);
+  assert.equal(apps.find(a => a.brand === 'youtube').appId, '9Ur5IzDKqV.TizenYouTube');
+});
+
 test('apps outside the default Home stay listed, including Apple Music', () => {
   const h = harness();
   let apps;

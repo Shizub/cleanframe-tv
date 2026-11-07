@@ -30,7 +30,9 @@ The current interface has List and Dock, independent appearance choices, an app 
 
 The maintainer confirmed that the custom interface appears, opens Netflix and YouTube using the normal remote, and opens Other apps. The physical Home button from Netflix returns to CleanFrame. Netflix handles repeated Back inside its own app; an exit destination was not observed.
 
-Netflix uses `org.tizen.netflix-app`. YouTube uses `9Ur5IzDKqV.TizenYouTube`, with `com.samsung.tv.cobalt-yt` as a fallback. These IDs came from this TV's installed-app list. Other TVs must discover their own IDs.
+Netflix uses `org.tizen.netflix-app`. YouTube uses `9Ur5IzDKqV.TizenYouTube`. These IDs came from this TV's installed-app list. Other TVs must discover their own IDs.
+
+On a 2018 Frame (Tizen 4.0), both YouTube apps are installed. `com.samsung.tv.cobalt-yt` is the TV's own YouTube, the one Samsung's menu opens, and it holds the account signed in on the TV. `9Ur5IzDKqV.TizenYouTube` is a lighter web app that opens signed out. When both are present, the YouTube tile now opens `com.samsung.tv.cobalt-yt`. A Mac cannot launch it over the debug connection (the TV answers 400), but CleanFrame can.
 
 ## Pending physical checks
 

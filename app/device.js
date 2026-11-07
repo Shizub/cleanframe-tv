@@ -14,7 +14,9 @@
     'KaLitts8bq.tenplaySamsungTizen', 'eYuOiOLYQX.KayoSports', 'Ne2ZsPWdKl.9NOW',
     '3KA0pm7a7V.TubiTV', 'rJeHak5zRg.Spotify', 'icp4AvUPiA.7plus'];
   /* Older TVs list some apps under other IDs, so they still meet their tile on Home. */
-  var ALIASES = { 'RN1MCdNq8t.Netflix': 'netflix', 'evKhCgZelL.AmazonIgnitionLauncher2': 'primevideo' };
+  var ALIASES = { 'RN1MCdNq8t.Netflix': 'netflix', 'evKhCgZelL.AmazonIgnitionLauncher2': 'primevideo', 'com.samsung.tv.cobalt-yt': 'youtube' };
+  /* The TV's own YouTube holds the account signed in on the TV; the store web app beside it opens signed out. */
+  var PREFERRED = ['com.samsung.tv.cobalt-yt'];
   var CONSUMER_SYSTEM = ['org.tizen.browser', 'com.microsoft.copilot', 'org.tizen.apple.apple-music'];
   var EXTRA_BRANDS = {'rJeHak5zRg.Spotify': 'spotify', '5b8c3eb16b.BeamCTVDev': 'hbomax', 'cj37Ni3qXM.HBONow': 'hbomax', '3KA0pm7a7V.TubiTV': 'tubi', 'org.tizen.apple.apple-music': 'applemusic'};
   var INTERNAL = ['adplatform.ADPlayer', 'WykOS4t4F0.cmsWebApp', '25emanual3.emanual',
@@ -132,11 +134,14 @@
           var consumer = /^[A-Za-z0-9]{10}\.[A-Za-z0-9_-]+$/.test(a.id) || CONSUMER_SYSTEM.indexOf(a.id) >= 0;
           if (a.id === self || INTERNAL.indexOf(a.id) >= 0 || seen[a.id] || !a.name || (!primary && !stream && (!a.show || !consumer))) return;
           if (!primary && (/(?:service|worker|preview|promotion|plugin|launcher|test|sdk|^ep[ -]|factory|daemon)/i.test(a.name) || /(?:service|worker|preview|promotion|plugin|test|sdk|factory|daemon)/i.test(a.id))) return;
-          if (/-dummy$/.test(a.id) || a.id === 'com.samsung.tv.cobalt-yt') return;
+          if (/-dummy$/.test(a.id)) return;
           seen[a.id] = true;
           result.push({ appId: a.id, name: a.name, brand: known[a.id] || EXTRA_BRANDS[a.id] || '', icon: a.iconPath || '', rank: primary ? Object.keys(IDS).indexOf(known[a.id]) : (stream ? 20 : 30) });
         });
-        result.sort(function (a, b) { return a.rank - b.rank || a.name.toLowerCase().localeCompare(b.name.toLowerCase()); });
+        result.sort(function (a, b) { return a.rank - b.rank || PREFERRED.indexOf(b.appId) - PREFERRED.indexOf(a.appId) || a.name.toLowerCase().localeCompare(b.name.toLowerCase()); });
+        // One tile per known app: the first of its IDs, so the preferred one when both are installed.
+        var taken = {};
+        result = result.filter(function (a) { if (!known[a.appId]) return true; if (taken[a.brand]) return false; taken[a.brand] = true; return true; });
         finish(null, { apps: result, installed: list.map(function (a) { return a.id; }) });
       }, function (err) { finish(failure(err)); });
     } catch (err) { finish(failure(err)); }
