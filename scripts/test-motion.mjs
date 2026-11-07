@@ -76,6 +76,30 @@ test('the settling time is the last moment the motion can be seen', () => {
   }
 });
 
+test('a small move takes fewer keyframes, and still follows the spring', () => {
+  const { M } = engine();
+  const small = element(), large = element(), fade = element();
+  M.set(small, { s: .877 });
+  M.to(small, { s: 1 }, 'focus');
+  M.set(large, { x: 0 });
+  M.to(large, { x: 116 }, 'select');
+  M.set(fade, { o: 0 });
+  M.to(fade, { o: 1 }, 'blur');
+  assert.equal(small.played[0].frames.length, 9);
+  assert.equal(large.played[0].frames.length, 15);
+  assert.equal(fade.played[0].frames.length, 9);
+  const { frames, options } = small.played[0], seconds = options.duration / 1000, scaleOf = frame => Number(/scale\(([\d.]+)\)/.exec(frame.transform)[1]);
+  let worst = 0;
+  for (let t = 0; t <= seconds; t += 1 / 240) {
+    let i = 0;
+    while (i < frames.length - 2 && frames[i + 1].offset * seconds < t) i++;
+    const from = frames[i].offset * seconds, to = frames[i + 1].offset * seconds, u = (t - from) / (to - from);
+    const shown = scaleOf(frames[i]) + (scaleOf(frames[i + 1]) - scaleOf(frames[i])) * u;
+    worst = Math.max(worst, Math.abs(shown - (1 + M.state(M.SPRINGS.focus, -.123, 0, t).x)) * 106);
+  }
+  assert.ok(worst < 1, 'a tile strays by ' + worst + ' pixels');
+});
+
 test('the keyframes follow the spring within a pixel or two', () => {
   const { M } = engine();
   for (const name of Object.keys(M.SPRINGS)) {

@@ -163,6 +163,45 @@ test('the sound stops when another app takes over, and comes back after', () => 
   assert.deepEqual(names(e), ['launch', 'ok']);
 });
 
+test('the launcher can open the audio ahead of a key, once, in silence, and not behind an app', () => {
+  const e = ready();
+  e.document.hidden = true;
+  e.Sound.prepare();
+  assert.equal(e.log.contexts.length, 0);
+  e.document.hidden = false;
+  e.Sound.prepare();
+  e.Sound.prepare();
+  assert.equal(e.log.contexts.length, 1);
+  assert.equal(e.log.started.length, 0);
+  e.Sound.play('ok');
+  assert.equal(e.log.contexts.length, 1);
+  assert.equal(e.log.started.length, 1);
+});
+
+test('at rest the audio output closes, and a sound or the launcher opens it again', () => {
+  const e = ready();
+  e.Sound.rest();
+  assert.equal(e.log.contexts.length, 0, 'resting does not open what is closed');
+  e.Sound.prepare();
+  e.Sound.rest();
+  assert.equal(e.log.contexts[0].state, 'suspended');
+  e.Sound.play('wake');
+  assert.equal(e.log.contexts[0].state, 'running');
+  assert.deepEqual(names(e), ['wake']);
+  e.Sound.rest();
+  e.Sound.prepare();
+  assert.equal(e.log.contexts[0].state, 'running');
+});
+
+test('only Web Audio has something to open, and a refusal goes to the next method', () => {
+  const element = ready({ web: false });
+  element.Sound.prepare();
+  assert.equal(element.log.contexts.length, 0);
+  const refused = ready({ refuseContext: true });
+  refused.Sound.prepare();
+  assert.equal(refused.Sound.method(), 'element');
+});
+
 test('without Web Audio, an audio element plays a real WAV of the same samples', () => {
   const e = ready({ web: false });
   assert.equal(e.Sound.method(), 'element');

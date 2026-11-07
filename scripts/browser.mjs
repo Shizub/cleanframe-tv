@@ -6,6 +6,14 @@ import { chromium } from 'playwright';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
 
+// CLEANFRAME_BROWSER_CHANNEL=chrome uses the installed Chrome instead of Playwright's Chromium.
+// CLEANFRAME_BROWSER_PATH runs another browser, such as an old Chromium close to a TV's engine. It stays off the network.
+export function launchOptions(args = []) {
+  const path = process.env.CLEANFRAME_BROWSER_PATH;
+  if (!path) return { headless: true, channel: process.env.CLEANFRAME_BROWSER_CHANNEL || undefined, args };
+  return { headless: true, executablePath: path, args: [...args, '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1', '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-extensions', '--disable-default-apps'] };
+}
+
 // Playwright's networkidle has hung with no request open while the CPU is throttled.
 // The page's own resource list going quiet answers the same question without that signal.
 export async function networkQuiet(page, quietMs = 500) {
@@ -43,8 +51,7 @@ export async function openPreview({ publicFonts = false, duo = false } = {}) {
         if (match) { clearTimeout(timeout); resolve(match[0]); }
       });
     });
-    // CLEANFRAME_BROWSER_CHANNEL=chrome uses the installed Chrome instead of Playwright's Chromium.
-    browser = await chromium.launch({ headless: true, channel: process.env.CLEANFRAME_BROWSER_CHANNEL || undefined });
+    browser = await chromium.launch(launchOptions());
     return { browser, baseURL, close: async () => {
       try { await browser.close(); }
       finally { server.kill(); await once(server, 'exit'); }

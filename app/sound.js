@@ -78,7 +78,6 @@
     master.gain.value = LEVELS[level] * (night ? NIGHT.gain : 1);
     filter.frequency.value = night ? NIGHT.cutoff : DAY_CUTOFF;
   }
-  /* Created at the first sound: a browser refuses to open the audio before a key. */
   function open() {
     try {
       ctx = new root.AudioContext();
@@ -106,6 +105,22 @@
     voice.source.stop(time + 0.02);
   }
   function stopAll() { Object.keys(active).forEach(hush); }
+  function wake() {
+    var waking = ctx.resume();
+    if (waking && waking.catch) waking.catch(function () {});
+  }
+  /* The first opening blocks for half a second, so the launcher does it between two keys. A browser may keep it
+     suspended until a key comes, which only takes a moment. */
+  function prepare() {
+    if (method !== 'web' || document.hidden) return;
+    if (!ctx) open();
+    else if (ctx.state === 'suspended') wake();
+  }
+  /* Nothing to play for a while: the audio output need not stay open. */
+  function rest() {
+    stopAll();
+    if (ctx) ctx.suspend();
+  }
   function use(name) {
     stopAll();
     method = name;
@@ -129,12 +144,11 @@
     return Math.max(HOLD.softMin, 1 - streak * HOLD.softStep);
   }
   function startWeb(buffer, voice, gain, x) {
-    var source, amp, pan, self, waking;
+    var source, amp, pan, self;
     if (!ctx && !open()) return false;
     if (ctx.state === 'suspended') {
       stopAll();
-      waking = ctx.resume();
-      if (waking && waking.catch) waking.catch(function () {});
+      wake();
     }
     hush(voice);
     source = ctx.createBufferSource();
@@ -184,14 +198,12 @@
   }
 
   /* The sound stops as soon as an app or a source takes over. */
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) return;
-    stopAll();
-    if (ctx) ctx.suspend();
-  });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) rest(); });
 
   root.Sound = {
     play: play,
+    prepare: prepare,
+    rest: rest,
     family: function () { return family; },
     setFamily: setFamily,
     setLevel: function (name) {

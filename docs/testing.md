@@ -30,6 +30,8 @@ PLAYWRIGHT_BROWSERS_PATH="$PWD/.local/playwright" npm run check:browser
 
 For manual review, use `npm run dev` and open `/home/`. Use the arrow keys, Enter and Escape. Check the changed flow in List and Dock, on Photo, Light and Dark backgrounds. Check a single app and all nine apps when changing app layout. In Settings, browse without applying, apply with OK, return with both Back routes, and cancel a pending resource load. Check editor placement/undo, wallpaper rotation pausing during panels/background time, and restored focus on return when those flows change. Browser preferences are separate from TV preferences.
 
+`CLEANFRAME_BROWSER_PATH=/path/to/browser` runs the browser checks in another Chromium build, off the network, for example the engine of an older TV. `check:duo` runs completely in Chromium 85.0.4182. In `check:browser`, the scenarios that use Playwright locators stop in that build, because Playwright's own page code needs `checkVisibility`. Without a window it also draws in software, so its frame timings do not predict a TV's, and on macOS 26 it crashes with a window.
+
 `CLEANFRAME_PUBLIC_FONTS=1 npm run check:performance` runs the existing 4× CPU-throttled Chromium regression screen. Compare navigation work, frame stalls, retained DOM/heap and live-filter checks before and after rendering changes. This is not a physical-TV benchmark.
 
 ## Optional native-profile checks

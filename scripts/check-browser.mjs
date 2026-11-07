@@ -308,7 +308,8 @@ try {
       p.__expectedFailures.push('/assets/materials/');
       await p.route('**/assets/materials/*', route => failImages ? route.abort('failed') : route.continue());
     });
-    await current.waitForFunction(() => window.ShoreQA && !ShoreQA.state().pending && !ShoreQA.ready());
+    // Frames are paused while hidden, so this wait cannot count on them.
+    await current.waitForFunction(() => window.ShoreQA && !ShoreQA.state().pending && !ShoreQA.ready(), null, { polling: 100 });
     const before = await stored();
     failImages = false;
     await current.evaluate(() => window.__setHidden(false)); await ready();

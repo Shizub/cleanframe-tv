@@ -1300,7 +1300,7 @@
   /* The glass is baked for each capsule size and each thing that moves is an image on its own layer:
      navigation only changes transform and opacity, and the day and night images only cross-fade. */
   var DUO_ROW = { pitch: 116, pad: 10, h: 136, gap: 28, y: 884 }, DUO_CENTER_Y = DUO_ROW.y + DUO_ROW.h / 2, DUO_CAP_TOP = 158, DUO_ICON = 106, DUO_REST = .877;
-  var DUO_VOL = { x: 80, y: 80, track: 228, shown: 2200 }, DUO_ARRIVAL_MS = 2500;
+  var DUO_VOL = { x: 80, y: 80, track: 228, shown: 2200 }, DUO_ARRIVAL_MS = 2500, DUO_AUDIO_MS = 1200, DUO_FONT = '600 42px "Duo Geist"';
   var DUO_IDLE_MS = 20000, DUO_FADE_MS = 1200, DUO_FILES = 'assets/duo/', DUO_LENS = 164;
   var DUO_DAYS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'], DUO_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
   var duo = { built: false, rowKey: null, level: -1, scheme: 'day', focus: null, idle: false, idleTimer: 0, slots: [], apps: [], controls: [], text: null, tempEl: null, widths: {}, card: null, errShown: null, pendingShown: false, toastTimer: 0, connected: null, bumped: false, volume: null, volumeTimer: 0 };
@@ -1365,7 +1365,7 @@
     M.set(duo.volFill, { x: -DUO_VOL.track });
     M.set(duoRow, { y: 0, o: 1 });
     // The names and the date are measured in this face, so measure again once it is here.
-    if (document.fonts && document.fonts.load) document.fonts.load('600 42px "Duo Geist"').then(function () { duo.widths = {}; if (S.c.layout === 'duo') render(); }, function () {});
+    if (document.fonts) document.fonts.load(DUO_FONT).then(duoMeasureNames, duoMeasureNames);
   }
   function duoDigit(ch) {
     var g = DUO_CLOCK.glyphs[ch], el = document.createElement('div');
@@ -1463,7 +1463,6 @@
       if ((el.className.indexOf(' is-focus') >= 0) !== on) el.className = on ? el.className + ' is-focus' : el.className.replace(' is-focus', '');
     });
     duoPillLabel.textContent = name;
-    // Each name is measured once: reading a width on every key would force a layout on every key.
     width = duo.widths[name] || (duo.widths[name] = duoPillLabel.offsetWidth);
     duoPill.style.width = width + 'px';
     left = clamp(Math.round(cx - width / 2), 80, 1840 - width);
@@ -1476,6 +1475,20 @@
       M.set(duoPillField, { x: -left, y: 68 - DUO_ROW.y });
     }
   }
+  /* Each name is measured once its font is here, ahead of the keys: reading a width on a key forces a layout on that key. */
+  function duoMeasureNames() {
+    var shown = duoPillLabel.textContent;
+    if (!duo.apps) return;
+    duo.widths = {};
+    duo.apps.concat(duo.controls).forEach(function (el) {
+      var name = el.getAttribute('aria-label');
+      if (duo.widths[name]) return;
+      duoPillLabel.textContent = name;
+      duo.widths[name] = duoPillLabel.offsetWidth;
+    });
+    duoPillLabel.textContent = shown;
+    if (S.c.layout === 'duo') render();
+  }
   function renderDuo(hs) {
     duoBuild();
     if (duo.rowKey !== S.c.home.join()) renderDuoRow();
@@ -1486,7 +1499,7 @@
   function setDuoIdle(value) {
     if (duo.idle === value) return;
     duo.idle = value;
-    if (value) M.to(duoRow, { y: 34, o: 0 }, 'panelOut');
+    if (value) { M.to(duoRow, { y: 34, o: 0 }, 'panelOut'); Sound.rest(); }
     else M.to(duoRow, { y: 0, o: 1 }, 'panelIn');
   }
   /* After 20 seconds on Home the row steps aside, and the screen is just the wallpaper and the clock. */
@@ -1871,6 +1884,8 @@
     Sound.setLevel(S.c.sound);
     Sound.setNight(duo.scheme === 'night');
     Sound.setFamily(S.c.soundStyle);
+    // Soon after starting, so that no key has to wait for the audio to open.
+    if (!duo.audioAsked) { duo.audioAsked = true; setTimeout(function () { if (S.c.layout === 'duo') Sound.prepare(); }, DUO_AUDIO_MS); }
   }
   /* Where the selection is, from 0 to 1 across the screen, and its note: one place always gives the same sound. */
   function duoPlace(t) {
@@ -1914,14 +1929,17 @@
   }
 
   /* ---------- Arrival ---------- */
-  /* The launcher arrives in one piece: it waits for its images and its font, and a slow one never holds it for long. */
+  /* The launcher arrives in one piece: it hides until its wallpapers are in place, then waits for its other images and its font. A slow one never holds it for long. */
   function duoArrive() {
-    var home = $('duoHome'), timer, waits = Array.prototype.map.call(home.querySelectorAll('img'), function (im) { return im.decode ? im.decode().catch(function () {}) : null; });
+    var home = $('duoHome'), timer;
     function show() { clearTimeout(timer); home.className = 'duo-home'; }
-    if (document.fonts) waits.push(document.fonts.load('600 42px "Duo Geist"').catch(function () {}));
     home.className = 'duo-home is-arriving';
     timer = setTimeout(show, DUO_ARRIVAL_MS);
-    Promise.all(waits).then(show);
+    return function () {
+      var waits = Array.prototype.map.call(home.querySelectorAll('img'), function (im) { return im.decode ? im.decode().catch(function () {}) : null; });
+      if (document.fonts) waits.push(document.fonts.load(DUO_FONT).catch(function () {}));
+      Promise.all(waits).then(show);
+    };
   }
 
   /* ---------- Volume ---------- */
@@ -2443,7 +2461,7 @@
     if (im.complete) { if (im.naturalWidth) ready(); else finish(false); }
     else { im.onload = ready; im.onerror = function () { finish(false); }; }
   }
-  function swapImg(k, im) { var old = IMG[k]; if (old === im) return; im.style.cssText = old.style.cssText; if (old.id) im.id = old.id; old.parentNode.replaceChild(im, old); IMG[k] = im; }
+  function swapImg(k, im) { var old = IMG[k]; if (old === im) return; im.style.cssText = old.style.cssText; im.decoding = old.decoding; if (old.id) im.id = old.id; old.parentNode.replaceChild(im, old); IMG[k] = im; }
   function bundleKey(look) { return look.layout === 'duo' ? 'duo' : look.wall + '|' + look.material; }
   function loadBundle(look, token, done) {
     var imgs, keys, left, allOk = true;
@@ -2502,6 +2520,7 @@
       if (bundle) committedBundle = bundle;
       S.lookError = null; S.previewBundle = null;
       render(); syncRotation();
+      if (opts.done) opts.done();
       if (reflow) window.requestAnimationFrame(function () { window.requestAnimationFrame(function () {
         if (frame !== reflowToken) return;
         S.reflow = false; stage.className = stage.className.replace(/\s+is-reflow/g, '');
@@ -2517,8 +2536,9 @@
       if (type === 'load') S.wallError = target.wall;
       S.lookError = { type: type, reason: reason || null, patch: changes, row: opts.row || (type === 'font' ? 'font' : S.appearanceFocus), transient: !!opts.transient, wall: target.wall, font: target.font };
       if (type === 'font') log((opts.startup ? 'font fallback: ' : 'Font kept: ') + (opts.startup ? target.font : FONTS[S.c.font].name) + (opts.startup ? '' : ' (' + reason + ')'));
-      if (type === 'font' && opts.startup && target.font !== 'manrope') { setLook({ font: 'manrope' }, { transient: true }); return; }
+      if (type === 'font' && opts.startup && target.font !== 'manrope') { setLook({ font: 'manrope' }, { transient: true, done: opts.done }); return; }
       render(); syncRotation();
+      if (opts.done) opts.done();
     }
     function complete() {
       if (!imageDone || !fontDone || failed || token !== wallToken) return;
@@ -2715,7 +2735,7 @@
       release();
       if (S.c.bg === 'photo' && !S.pending && !S.previewBundle && (!committedBundle || S.bundleKey !== bundleKey(S.c))) setLook({}, { transient: true, startup: true });
       setDuoIdle(false); duoTouch();
-      if (S.c.layout === 'duo') readVolume();
+      if (S.c.layout === 'duo') { readVolume(); Sound.prepare(); }
       refreshInputsOnReturn(); after(); updateClock(); focusStage(); refreshCatalog();
     }
   });
@@ -2758,9 +2778,8 @@
   M.setJump(REDUCED_MOTION);
   M.set(duoToastEl, { o: 0 });
   initialise();
-  setLook({}, { transient: true, startup: true });
+  setLook({}, { transient: true, startup: true, done: S.c.layout === 'duo' ? duoArrive() : null });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); duoTouch();
-  if (S.c.layout === 'duo') duoArrive();
   if (!document.hidden) refreshCatalog();
   FrameDevice.watchSources(function () { if (!document.hidden && S.c.layout === 'duo') refreshSources(true); });
 })();

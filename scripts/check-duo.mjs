@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { chromium } from 'playwright';
-import { networkQuiet, openPreview, root } from './browser.mjs';
+import { launchOptions, networkQuiet, openPreview, root } from './browser.mjs';
 
 if (!existsSync(root + '.local/duo/glass/manifest.json')) {
   console.log('Duo checks skipped: this checkout has no private files in .local/duo/.');
@@ -144,6 +144,18 @@ try {
     check('the clock has four digits and a colon', shown.digits === 5, shown.digits);
     check('the weather reading reaches the ring', shown.temp === '12°', shown.temp);
     check('the selected name is shown', shown.pill === 'Netflix', shown.pill);
+    const fit = () => page.evaluate(() => [document.getElementById('duoPill').style.width, document.getElementById('duoPillLabel').offsetWidth + 'px']);
+    check('the name fits its pill, in its own font', (await fit())[0] === (await fit())[1], await fit());
+    const reads = await page.evaluate(() => {
+      let count = 0;
+      const label = document.getElementById('duoPillLabel'), real = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+      Object.defineProperty(label, 'offsetWidth', { configurable: true, get() { count++; return real.get.call(label); } });
+      for (let i = 0; i < 10; i++) ShoreQA.nav(['right']);
+      delete label.offsetWidth;
+      return count;
+    });
+    check('the names are measured ahead of the keys', reads === 0, reads);
+    check('the last name fits too', (await fit())[0] === (await fit())[1], await fit());
     check('starting up shows no message', await toast(page) === '', await toast(page));
     const clock = await page.evaluate(() => { const boxes = Array.prototype.map.call(document.querySelectorAll('#duoClock > div'), el => el.getBoundingClientRect()); return { left: Math.min(...boxes.map(b => b.left)), right: Math.max(...boxes.map(b => b.right)), top: boxes[0].top }; });
     check('the clock is centred', Math.abs((clock.left + clock.right) / 2 - 960) < 16, clock);
@@ -157,19 +169,31 @@ try {
     const waiting = page => page.waitForFunction(() => document.getElementById('duoHome') && document.getElementById('duoHome').className.includes('is-arriving'));
     let release;
     const held = new Promise(done => { release = done; });
-    let page = await open({ wait: false, prepare: p => p.route('**/assets/duo/wall-*.webp', async route => { await held; await route.continue(); }) });
+    // The wallpapers load apart and are swapped in, so look at them at the very moment the launcher stops hiding.
+    const watch = () => new MutationObserver(list => list.forEach(({ target }) => {
+      if (target.id !== 'duoHome' || target.className.includes('is-arriving') || window.__walls) return;
+      window.__walls = ['duoDayImg', 'duoNightImg'].map(id => ({ width: document.getElementById(id).naturalWidth, decoding: document.getElementById(id).decoding }));
+    })).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    let page = await open({ wait: false, prepare: async p => { await p.addInitScript(watch); await p.route('**/assets/duo/wall-*.webp', async route => { await held; await route.continue(); }); } });
     await waiting(page);
     check('it goes into hiding at once, with no fade', await page.evaluate(() => getComputedStyle(document.getElementById('duoHome')).transitionDuration) === '0s');
+    await page.waitForFunction(() => Array.prototype.every.call(document.querySelectorAll('#duoHome img'), im => im.complete));
     await page.waitForTimeout(400);
-    check('nothing shows while the wallpaper is on its way', await opacity(page) === '0', await opacity(page));
-    check('the wallpapers are drawn with everything else, not after', await page.evaluate(() => ['duoDayImg', 'duoNightImg'].every(id => document.getElementById(id).decoding === 'sync')));
+    check('nothing shows while the wallpaper is on its way, with all the rest here', await opacity(page) === '0', await opacity(page));
     release();
     await arrived(page);
+    const walls = await page.evaluate(() => window.__walls);
+    check('the wallpapers are in place as it shows', walls.every(wall => wall.width > 0), walls);
+    check('and drawn with everything else, not after', walls.every(wall => wall.decoding === 'sync'), walls);
     check('then the launcher arrives whole', await page.evaluate(() => document.getElementById('duoDayImg').naturalWidth > 0 && document.getElementById('duoHome').className === 'duo-home'));
     await page.context().close();
     page = await open({ prepare: p => p.route('**/assets/duo/glass/ring-*.webp', route => route.abort()) });
     await arrived(page);
     check('a missing image does not hold it', await opacity(page) === '1', await opacity(page));
+    await page.context().close();
+    page = await open({ wait: false, prepare: p => p.route('**/assets/duo/wall-night.webp', route => route.abort()) });
+    await waiting(page); await arrived(page);
+    check('nor does a missing wallpaper', await opacity(page) === '1' && (await where(page)).focusCount === 1, await opacity(page));
     await page.context().close();
     page = await open({ wait: false, prepare: p => p.route('**/assets/duo/wall-night.webp', () => {}) });
     await waiting(page); await page.waitForTimeout(3000);
@@ -870,10 +894,33 @@ try {
     await soundReady(page);
     await page.clock.fastForward(21000);
     check('the row stepping aside is silent', (await state(page)).duo.idle === true && await heard(page) === '', await heard(page));
+    await page.waitForFunction(() => Sound.context() && Sound.context().state === 'suspended');
+    check('and the audio output rests with it', true);
     await page.clock.fastForward(120000);
     check('the minute changing is silent', await heard(page) === '', await heard(page));
     await page.keyboard.press('ArrowRight');
     check('the first key only wakes, with a low note', await heard(page) === 'wake' && (await where(page)).focusAction === 'home.app.netflix', [await heard(page), await where(page)]);
+    await page.waitForFunction(() => Sound.context().state === 'running');
+    check('and the audio output comes back', true);
+    await page.context().close();
+  }
+  {
+    const page = await open();
+    await soundReady(page);
+    check('the audio is not open while the launcher starts', await page.evaluate(() => !Sound.context()) || await heard(page) === '', await heard(page));
+    await page.waitForFunction(() => Sound.context());
+    check('it opens by itself, in silence', await heard(page) === '', await heard(page));
+    const first = await page.evaluate(() => { const start = performance.now(); ShoreQA.nav(['right']); return performance.now() - start; });
+    check('so the first key does not wait for it', first < 100, first);
+    check('and is heard', await heard(page) === 'select', await heard(page));
+    await page.context().close();
+  }
+  {
+    const page = await open({ hidden: true });
+    await page.waitForTimeout(1600);
+    check('the audio stays closed behind an app', await page.evaluate(() => !Sound.context()));
+    await page.evaluate(() => { window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); });
+    check('and opens when the launcher comes on screen', await page.evaluate(() => !!Sound.context()));
     await page.context().close();
   }
   {
@@ -1175,7 +1222,7 @@ try {
     rmSync(folder, { recursive: true, force: true });
     mkdirSync(folder, { recursive: true });
     execFileSync('python3', ['-I', '-c', 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])', root + 'dist/CleanFrame-unsigned.wgt', folder]);
-    const browser = await chromium.launch({ headless: true, channel: process.env.CLEANFRAME_BROWSER_CHANNEL || undefined, args: ['--allow-file-access-from-files'] });
+    const browser = await chromium.launch(launchOptions(['--allow-file-access-from-files']));
     try {
       const page = await open({ browser, url: 'file://' + folder + 'index.html' });
       const broken = () => page.evaluate(() => Array.prototype.filter.call(document.images, img => img.getAttribute('src') && !img.naturalWidth).map(img => img.getAttribute('src')));
@@ -1212,7 +1259,8 @@ try {
       return out.sort((a, b) => a - b);
     });
     const p95 = times[Math.floor(times.length * .95)];
-    check('a key costs little, even at a quarter of the speed', p95 < 20, p95);
+    // An old engine takes about twice as long, most of it on the first walk along the row, while its code warms up.
+    check('a key costs little, even at a quarter of the speed', p95 < (process.env.CLEANFRAME_BROWSER_PATH ? 30 : 20), p95);
     console.log('Duo key p95 at 4x slowdown: ' + p95.toFixed(1) + ' ms');
     await page.context().close();
   }
@@ -1278,4 +1326,4 @@ section = 'Public build';
 }
 
 if (failures.length) { console.error(failures.join('\n')); console.error(failures.length + ' Duo checks failed; ' + passed + ' passed.'); process.exit(1); }
-console.log(passed + ' Duo checks passed.');
+console.log(passed + ' Duo checks passed' + (process.env.CLEANFRAME_BROWSER_PATH ? ' in the browser at CLEANFRAME_BROWSER_PATH.' : '.'));

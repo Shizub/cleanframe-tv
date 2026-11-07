@@ -35,7 +35,7 @@ For the LS03F, a blocked execution/readback path stopped the experiment before b
 
 ## Duo layout
 
-The Duo layout, with its sounds and its volume pill, has no TV result. It has only run in a recent desktop browser with a simulated TV, and nothing in the table above applies to it. `scripts/check.py` rejects the CSS and JavaScript that Chromium 85 lacks, which lowers the risk on Tizen 6.5 without removing it. The Web Audio method, the delay between image and sound, Samsung's banner beside the pill, the `tv.audio` privilege and the `VIDEOSOURCE` listener are only known on a TV.
+The Duo layout, with its sounds and its volume pill, has no TV result, and nothing in the table above applies to it. It has only run in desktop browsers with a simulated TV: a recent Chrome and Chromium 85.0.4182, the engine reported for Tizen 6.5. In that build all its checks pass, including the packaged widget opened from its own files, and its screens match a recent Chrome except for text smoothing. This lowers the risk on Tizen 6.5 without removing it: Samsung's engine carries its own changes, and that build drew in software, so the smoothness of the cards is still unknown. The Web Audio method, the delay between image and sound, Samsung's banner beside the pill, the `tv.audio` privilege and the `VIDEOSOURCE` listener are only known on a TV.
 
 ## Native Home limits
 

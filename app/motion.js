@@ -12,8 +12,9 @@
     panelOut: { d: 0.35, b: 0 },
     digit: { d: 0.45, b: 0 }
   };
-  /* A spring bends most at its start, so the keyframes crowd there: 14 follow it as closely as 28 evenly spaced ones. */
-  var KEYS = 14, CROWD = 1.6;
+  /* A spring bends most at its start, so the keyframes crowd there: 14 follow it as closely as 28 evenly spaced ones.
+     A small move needs fewer, and each keyframe costs the TV time on every key. */
+  var KEYS = 14, KEYS_SMALL = 8, SMALL_MOVE = 16, SCALE_REACH = 120, CROWD = 1.6;
   var DEFAULTS = { x: 0, y: 0, s: 1, o: 1 };
   var EPS = { x: 0.2, y: 0.2, s: 0.0007, o: 0.003 };
   var jump = false;
@@ -70,7 +71,7 @@
   }
 
   /* Whole pixels only: a layer straddling two pixels turns soft on the TV. */
-  function px(value) { return Math.round(value).toFixed(3); }
+  function px(value) { return Math.round(value); }
   function css(values) {
     return 'translate3d(' + px(values.x) + 'px,' + px(values.y) + 'px,0) scale(' + values.s.toFixed(4) + ')';
   }
@@ -117,12 +118,16 @@
     if (!moving && !m.anim) { for (key in values) m[key] = values[key]; return; }
     var active = {};
     for (key in channels) if (Math.abs(channels[key].x0) > EPS[key] || Math.abs(channels[key].v0) > EPS[key]) active[key] = channels[key];
-    var duration = settle(spring, active), frames = [], animateOpacity = 'o' in active, i, t, sample;
-    for (i = 0; i <= KEYS; i++) {
-      var offset = Math.pow(i / KEYS, CROWD);
+    var duration = settle(spring, active), frames = [], animateOpacity = 'o' in active, i, t, sample, reach = 0;
+    if (active.x) reach = Math.max(reach, Math.abs(active.x.x0), Math.abs(active.x.v0) / 8);
+    if (active.y) reach = Math.max(reach, Math.abs(active.y.x0), Math.abs(active.y.v0) / 8);
+    if (active.s) reach = Math.max(reach, Math.abs(active.s.x0) * SCALE_REACH, Math.abs(active.s.v0) * SCALE_REACH / 8);
+    var count = reach < SMALL_MOVE ? KEYS_SMALL : KEYS;
+    for (i = 0; i <= count; i++) {
+      var offset = Math.pow(i / count, CROWD);
       t = duration * offset;
       sample = {};
-      for (key in channels) sample[key] = channels[key].target + (i === KEYS || !active[key] ? 0 : state(spring, channels[key].x0, channels[key].v0, t).x);
+      for (key in channels) sample[key] = channels[key].target + (i === count || !active[key] ? 0 : state(spring, channels[key].x0, channels[key].v0, t).x);
       var frame = { offset: offset, transform: css(sample) };
       if (animateOpacity) frame.opacity = Math.max(0, Math.min(1, sample.o)).toFixed(3);
       frames.push(frame);
