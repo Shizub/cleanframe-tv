@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CleanFrame TV demo</title>
+<meta name="description" content="Try CleanFrame TV in your browser: a glassy, remote-first home screen for Samsung The Frame.">
+<style>
+@font-face{font-family:Manrope;src:url(app/assets/manrope.woff2) format('woff2');font-weight:200 800;font-display:swap}
+:root{
+  --bg:#0c0d11;--surface:#16181f;--surface-2:#20232c;--line:rgba(255,255,255,.12);
+  --text:#f4f4f6;--muted:#a6a9b4;--accent:#f2b35e;--focus:#ffffff;
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:400 16px/1.5 Manrope,system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.wrap{max-width:1200px;margin:0 auto;padding:var(--s5) var(--s4)}
+header{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);flex-wrap:wrap;margin-bottom:var(--s5)}
+.brand{font-size:18px;font-weight:700;letter-spacing:-.01em;margin:0}
+nav{display:flex;gap:var(--s2);flex-wrap:wrap}
+.link{display:inline-flex;align-items:center;min-height:44px;padding:0 var(--s4);border:1px solid var(--line);border-radius:999px;font-size:14px;font-weight:600;text-decoration:none}
+.link:hover{background:var(--surface-2)}
+.link.primary{background:var(--text);border-color:var(--text);color:#111217}
+.link.primary:hover{background:#fff}
+.frame{padding:clamp(8px,1.2vw,14px);border-radius:10px;background:linear-gradient(145deg,#3a3b41,#17181c);box-shadow:0 30px 80px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.08)}
+.screen{position:relative;aspect-ratio:16/9;background:#000;overflow:hidden}
+iframe{position:absolute;left:0;top:0;width:100%;height:100%;border:0;display:block}
+.controls{display:grid;grid-template-columns:auto 1fr;gap:var(--s6);align-items:center;margin-top:var(--s5)}
+.remote{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);gap:var(--s1)}
+button{appearance:none;font:inherit;font-weight:600;color:var(--text);background:var(--surface-2);border:1px solid var(--line);border-radius:14px;min-width:44px;min-height:44px;cursor:pointer;touch-action:manipulation}
+button:hover{background:#2c303b}
+button:active{transform:scale(.96)}
+.up{grid-area:1/2}.left{grid-area:2/1}.ok{grid-area:2/2;background:var(--text);color:#111217}.ok:hover{background:#fff}.right{grid-area:2/3}.down{grid-area:3/2}
+.side{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s3)}
+.side button{padding:0 var(--s4);font-size:14px}
+h1{font-size:clamp(24px,3.4vw,36px);line-height:1.15;letter-spacing:-.02em;margin:0 0 var(--s2);font-weight:700}
+.lead{margin:0 0 var(--s3);color:var(--muted);max-width:62ch}
+.keys{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:var(--s2) var(--s4);color:var(--muted);font-size:14px}
+kbd{font:600 12px/1 Manrope,system-ui,sans-serif;color:var(--text);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:3px 7px}
+footer{margin-top:var(--s6);padding-top:var(--s4);border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+footer p{margin:0 0 var(--s2)}
+@media (max-width:720px){.controls{grid-template-columns:1fr;gap:var(--s4);justify-items:center;text-align:center}.keys{display:none}.side{justify-content:center}.lead{margin-inline:auto}}
+@media (prefers-reduced-motion:reduce){button:active{transform:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="brand">CleanFrame TV</p>
+    <nav aria-label="Project links">
+      <a class="link" href="https://github.com/Shizub/cleanframe-tv">Source on GitHub</a>
+      <a class="link primary" href="https://github.com/Shizub/cleanframe-tv/releases/latest">Download</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="frame">
+      <div class="screen">
+        <iframe id="tv" src="app/index.html" title="CleanFrame TV, running on a simulated television" allow="autoplay"></iframe>
+      </div>
+    </div>
+
+    <section class="controls" aria-label="Remote control">
+      <div>
+        <div class="remote">
+          <button class="up" data-key="38" aria-label="Up">↑</button>
+          <button class="left" data-key="37" aria-label="Left">←</button>
+          <button class="ok" data-key="13">OK</button>
+          <button class="right" data-key="39" aria-label="Right">→</button>
+          <button class="down" data-key="40" aria-label="Down">↓</button>
+        </div>
+        <div class="side">
+          <button data-key="27">Back</button>
+          <button data-key="448" aria-label="Volume down">Vol −</button>
+          <button data-key="447" aria-label="Volume up">Vol +</button>
+        </div>
+      </div>
+      <div>
+        <h1>A home screen made of glass, for a TV that hangs like a painting.</h1>
+        <p class="lead">This is the real app on a simulated TV: nothing launches, and everything else behaves as it does on the wall. The interface is in French, as it was built for my own TV. Try Réglages, then Fond d’écran.</p>
+        <ul class="keys">
+          <li><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> Move</li>
+          <li><kbd>Enter</kbd> OK</li>
+          <li><kbd>Esc</kbd> Back</li>
+          <li><kbd>+</kbd> <kbd>−</kbd> <kbd>X</kbd> Volume</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>By Tristan Franceschetti, built on <a href="https://github.com/nthnclrk/CleanFrame">CleanFrame</a> by Nathan Clark (MIT). Not affiliated with Samsung or any streaming service.</p>
+    <p>Wallpapers from Unsplash, credited in the <a href="THIRD_PARTY_NOTICES.md">third-party notices</a>.</p>
+  </footer>
+</div>
+<script>
+(function () {
+  'use strict';
+  var tv = document.getElementById('tv'), keys = { 37: 1, 38: 1, 39: 1, 40: 1, 13: 1, 27: 1 };
+  function send(code) { tv.contentWindow.postMessage({ remote: code }, '*'); }
+  tv.addEventListener('load', function () { tv.contentWindow.focus(); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-key]'), function (button) {
+    button.addEventListener('click', function () { send(Number(button.getAttribute('data-key'))); });
+  });
+  /* With the focus on the page rather than in the TV, the keyboard still drives it. Enter on a page control keeps its usual meaning. */
+  document.addEventListener('keydown', function (event) {
+    var onControl = event.target.closest && event.target.closest('a,button');
+    if (!keys[event.keyCode] || onControl && (event.keyCode === 13 || event.keyCode === 27)) return;
+    event.preventDefault();
+    send(event.keyCode);
+  });
+}());
+</script>
+</body>
+</html>
