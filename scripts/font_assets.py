@@ -13,7 +13,7 @@ from private_files import check_widget, generated_path, private_path, secret_con
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_FONT_IDS = ['geist', 'newsreader']
-DEFAULT_DUO_WALL, PRIVATE_DUO_WALL = 'amber', 'perso'
+DEFAULT_DUO_WALL, PRIVATE_DUO_WALL = 'mon-fond', 'perso'
 DUO_THEME_FILES = ['wall-day.webp', 'wall-night.webp', 'frost-day.webp', 'frost-night.webp', 'thumb.webp']
 PRIVATE_FONTS = [
     {
