@@ -25,7 +25,8 @@
     "check:duo": "node scripts/check-duo.mjs",
     "check:performance": "node scripts/check-performance.mjs",
     "duo:add": "node scripts/duo-pack/add-wallpaper.mjs",
-    "demo": "python3 scripts/build-demo.py"
+    "demo": "python3 scripts/build-demo.py",
+    "showcase": "node scripts/capture-showcase.mjs"
   },
   "devDependencies": {
     "eslint": "10.13.0",
