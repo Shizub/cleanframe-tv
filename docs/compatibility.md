@@ -35,7 +35,9 @@ For the LS03F, a blocked execution/readback path stopped the experiment before b
 
 ## Duo layout
 
-The Duo layout, with its sounds and its volume pill, has no TV result, and nothing in the table above applies to it. It has only run in desktop browsers with a simulated TV: a recent Chrome and Chromium 85.0.4182, the engine reported for Tizen 6.5. In that build all its checks pass, including the packaged widget opened from its own files, and its screens match a recent Chrome except for text smoothing. This lowers the risk on Tizen 6.5 without removing it: Samsung's engine carries its own changes, and that build drew in software, so the smoothness of the cards is still unknown. The Web Audio method, the delay between image and sound, Samsung's banner beside the pill, the `tv.audio` privilege and the `VIDEOSOURCE` listener are only known on a TV.
+**On a real TV.** Duo was installed on a 65-inch UE65LS03N (2018 Frame, Tizen 4.0, Chromium 56, firmware T-KTM2DEUC-1360.0) on 7 November 2026, with the owner in front of it. The display and frost, the sounds, All apps, Art Mode, Samsung's menu, Inputs, the settings fallback, preloaded icons and YouTube with the TV's account all worked. That first trial found and fixed three engine limits: the moving frost needs `-webkit-clip-path` and rounded overflow, the audio engine lacks the `AudioBuffer` constructor and the stereo panner, and this TV lists Netflix, Prime Video and CANAL+ under other IDs. Still open on that TV: frame-time measurements, a flicker seen once during some movements, and card corners that briefly showed square. The wallpaper gallery has not been tried on a TV yet.
+
+**In a browser.** Duo's checks also pass in a recent Chrome and in Chromium 85.0.4182, the engine reported for Tizen 6.5, including the packaged widget opened from its own files, and its screens match a recent Chrome except for text smoothing. That build drew in software, so the smoothness of the cards is only known from a TV. The delay between image and sound, Samsung's banner beside the pill, and the `VIDEOSOURCE` listener have not been measured yet.
 
 ## Native Home limits
 

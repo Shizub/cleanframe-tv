@@ -1,110 +1,127 @@
-# CleanFrame
+<p align="center">
+  <img src="docs/images/hero.jpg" alt="The CleanFrame TV home screen, half by day and half by night, with a tall clock and a row of glass" width="100%">
+</p>
 
-A quieter home screen for Samsung The Frame. Your apps, a photograph and the time, with an interface made for the TV remote.
+<h1 align="center">CleanFrame TV</h1>
 
-![CleanFrame browser preview using the bundled Manrope font](docs/images/cleanframe-dock.jpg)
+<p align="center">
+  <strong>A glassy, remote-first home screen for Samsung The Frame.</strong><br>
+  Liquid Glass, spring animations and a screen that follows the sun, on a TV browser from 2017.
+</p>
 
-I built CleanFrame for one TV: my own Samsung The Frame, running Tizen. I'm sharing the code and setup notes as a starting point for other people to build on.
+<p align="center">
+  <a href="https://shizub.github.io/cleanframe-tv/"><strong>Try the live demo</strong></a> ·
+  <a href="https://github.com/Shizub/cleanframe-tv/releases/latest">Download</a> ·
+  <a href="docs/duo-engineering.md">How it works</a> ·
+  <a href="README.fr.md">Français</a>
+</p>
 
-**Use it at your own risk.** The web launcher targets Tizen 5.0 and later for installation, with [owner reports](docs/compatibility.md) across several models. That minimum is not a promise that every device flow is verified. The TV setup scripts and native Home helpers still reflect specific computers and firmware, so adapt them and test on your own hardware.
+<p align="center">
+  <a href="https://github.com/Shizub/cleanframe-tv/actions/workflows/check.yml"><img src="https://github.com/Shizub/cleanframe-tv/actions/workflows/check.yml/badge.svg" alt="Checks"></a>
+  <img src="https://img.shields.io/badge/Tizen-5.0%2B-1428A0" alt="Tizen 5.0 and later">
+  <img src="https://img.shields.io/badge/runtime-ES5%2C%20no%20dependencies-444" alt="ES5 runtime with no dependencies">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-444" alt="MIT licence"></a>
+</p>
 
-I highly recommend forking it and building on top of it, ideally with a coding agent that can help you understand and adapt the setup. Start with the browser preview, make the interface your own, then work through TV installation when you're ready. Native Home/startup changes need particular care; the setup guide covers the risks and recovery steps.
+<p align="center">
+  <img src="docs/images/duo-motion.webp" alt="Moving along the row of apps, opening Settings and changing the wallpaper" width="85%">
+</p>
 
-## Try the interface
+The home screen of a Samsung Frame is busy, and it is the first thing you see on a TV that is meant to hang like a painting. CleanFrame TV replaces it with something closer to a phone's lock screen, inspired by the iPhone Duo: a tall clock, a wallpaper, and a row of glass. It is built on [CleanFrame](https://github.com/nthnclrk/CleanFrame) by Nathan Clark.
 
-You need Node.js 22.13+ (22 LTS), or 24+, and Python 3.10+ to run the browser preview.
+It runs on my own 2018 Frame.
+
+## What it does
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/duo-day.jpg" alt="Home screen by day"><br><strong>Calm by day.</strong> A tall clock, the date and the weather. After 20 seconds the row steps aside, and the screen is just the picture and the time.</td>
+    <td width="50%"><img src="docs/images/duo-night.jpg" alt="Home screen by night"><br><strong>Follows the sun.</strong> The screen fades to night with the real altitude of the sun, computed offline.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/duo-gallery-day.jpg" alt="Wallpaper gallery"><br><strong>Any wallpaper, at will.</strong> Pick one in the gallery, and the glass changes with it. <a href="#make-it-yours">Add your own photographs</a> with one command.</td>
+    <td><img src="docs/images/duo-apps-night.jpg" alt="All apps grid"><br><strong>Every app.</strong> The TV's installed apps, with tiles baked for the known ones, in cards of frosted glass.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/duo-inputs-day.jpg" alt="HDMI inputs"><br><strong>HDMI on the row.</strong> A console sits next to the apps, with its own logo, and OK switches to it.</td>
+    <td><img src="docs/images/duo-volume-day.jpg" alt="Volume pill"><br><strong>A sound for each gesture.</strong> Eight styles, softer at night, and a volume pill made of real baked glass.</td>
+  </tr>
+</table>
+
+The original List and Dock layouts remain available in Settings.
+
+## Make it yours
 
 ```sh
-git clone https://github.com/nthnclrk/CleanFrame.git
-cd CleanFrame
+npm run duo:add -- ~/Pictures/photo.jpg --name "My wallpaper"
+```
+
+That one command crops the photograph, computes a night version and renders every piece of glass for it. The result stays on your computer unless you ask otherwise. [More options](scripts/duo-pack/README.md).
+
+## How it works
+
+A TV like this cannot afford live blur: [three large gradients can take it from 59.5 to 4.6 frames per second](https://github.com/NelsonEU/arn0-tv#what-the-hardware-can-afford). So there is one rule: **the TV only shows finished images, and only `transform` and `opacity` ever change.**
+
+```mermaid
+flowchart LR
+  A[Photograph] --> B[Day, night and frost]
+  B --> C[WebGL refraction shader<br>runs once, on a computer]
+  C --> D[40 pieces of glass<br>about 1.5 MB per wallpaper]
+  D --> E[TV: plain images]
+```
+
+- **Baked Liquid Glass:** a real refraction shader runs once for every shape the screen can show.
+- **Spring engine:** an ES5 engine with no dependency, solved analytically and played by the compositor. Nothing runs at rest.
+- **Sound engine:** synthesized sounds at matched loudness, with fallbacks from Web Audio to an audio element to the TV's own beeps.
+- **Offline day and night:** solar altitude from astronomical formulas, tested against independent values.
+
+[Read the full write-up](docs/duo-engineering.md), including what the first installation on a real TV broke.
+
+## Tested
+
+| Check | Result |
+| --- | --- |
+| Duo, in fresh browsers with a simulated TV | **500 checks** |
+| Same suite in Chromium 85, the engine of 2022 TVs | Passed before this release, see [testing](docs/testing.md) |
+| List and Dock layouts | **424 checks** |
+| Performance | **40 checks** |
+| Real 2018 Frame (Tizen 4.0, Chromium 56) | Display, sound, apps, Art Mode, inputs and Samsung's menu confirmed by hand |
+
+Browser checks are not TV measurements, and the [compatibility notes](docs/compatibility.md) keep them apart. Frame times on a TV are still to be measured, and the wallpaper gallery has not been tried on a TV yet.
+
+## Try it
+
+**In your browser:** open the [live demo](https://shizub.github.io/cleanframe-tv/), or download `CleanFrame-demo.zip` from the [latest release](https://github.com/Shizub/cleanframe-tv/releases/latest), unzip it and open `index.html`.
+
+**From the source**, with Node.js 22.13+ and Python 3.10+:
+
+```sh
+git clone https://github.com/Shizub/cleanframe-tv.git
+cd cleanframe-tv
 npm ci
 npm run dev:public
 ```
 
-Open [localhost:4795/home/](http://localhost:4795/home/). Use the arrow keys, Enter and Escape, or click the controls. App launches and Samsung screens require a TV; the preview reports that limitation when you select them.
+Then open [localhost:4795/home/](http://localhost:4795/home/). Use the arrows, Enter and Escape.
 
-The public preview uses the included Manrope, Geist and Newsreader fonts.
+**On a TV:** a Samsung TV only installs a package signed with your own certificate, so the download is unsigned. Follow the [setup guide](docs/agent-tv-setup-guide.md), and use it at your own risk.
 
-## What you can change
+## What I built
 
-- Choose a List or Dock layout, with icons, names or both.
-- Use a photograph, light or dark background, with a simple 12-hour clock.
-- Adjust typography, focus and glass materials through the same Settings interface.
-- Choose and reorder Home apps; discover installed apps on the TV.
-- Select from fifteen wallpapers and save your preferences locally.
-- Open Settings → Samsung → Inputs to choose a discovered HDMI source.
-- In a personal build, use the Duo layout: a tall clock over a wallpaper that follows the sun, apps and sources in one row of baked glass, a sound for each gesture and a volume pill. Its wallpaper and glass come from your own private files in ignored `.local/duo/`. Without them, as in the public preview and export, Duo is not offered. It has not been tried on a TV yet.
+CleanFrame by Nathan Clark provided the launcher: remote navigation, app discovery, preferences and the List and Dock layouts. This repository adds:
 
-The glass and blur are rendered ahead of time. The TV loads the finished images and uses transforms and opacity for focus feedback.
+- the French interface and the weather;
+- the Duo home screen and its cards of glass;
+- the baked glass pipeline and the wallpaper gallery;
+- the spring engine and the sound engine;
+- HDMI sources on the row, and a row that stays in step with the TV;
+- the port to a 2018 Frame and its older browser engine;
+- the Duo test suite.
 
-## Use a coding agent
+I designed it, made the decisions and tested it on real hardware. The code was written with [Claude Code](https://claude.com/claude-code), as the commits record.
 
-Open this repo in a local coding agent and give it a bounded change:
+## Credits and licence
 
-```text
-Read AGENTS.md, docs/development.md and docs/interaction-behaviour.md.
-Help me adapt CleanFrame. Start with the public-font browser preview.
-My first change is: <describe one change>.
-Preserve remote navigation, saved preferences and the ES5 runtime.
-Run the source checks and relevant browser checks. Show the result.
-This task is browser-only: do not connect to a TV, sign or install a
-package, or change Home/startup settings.
-```
+MIT, for the code and documentation of both Nathan Clark's project and this one: see [LICENSE](LICENSE). Photographs, fonts and logos keep their own terms, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The glass is rendered with [webgl-apple-liquid-glass](https://github.com/Oliverrr2424/webgl-apple-liquid-glass) by Oliver Nemo.
 
-See [working with an agent](docs/for-agents.md) for the TV setup prompt and the distinction between UI work, app installation and native Home changes. An agent needs local computer access for TV work; a hosted chat cannot reach your TV merely by reading this repo.
-
-## Put it on a TV
-
-Use the staged [Samsung The Frame setup guide](docs/agent-tv-setup-guide.md) to understand the process used on my TV and adapt it to yours. It covers the remote's Developer Mode sequence, official Samsung tools, your own certificates and app identity, installation, visible checks and recovery.
-
-The [latest release](https://github.com/nthnclrk/CleanFrame/releases/latest) includes an unsigned, public-font widget for inspection and adaptation. For your installation, build from source using your own identity in `.local/signing.json` and sign with your own certificates. The download is not a ready-to-install signed package.
-
-Signing supports an ignored `.local/signing.json` based on `signing.example.json`: select your SDK, existing certificate profile and your own SDK-generated app identity. See [local signing setup](docs/development.md#local-tv-tools-and-signing). The TV installation commands and native Home helper still contain reference-machine assumptions. Your agent must check the installed-app IDs and each device stage with you. Installing the app and assigning the remote Home button are separate steps.
-
-| Area | Evidence and limits |
-| --- | --- |
-| Reference hardware | Samsung QA55LS03DAWXXY / LS03D, firmware 2130.0, Tizen 9.0, 32-bit ARM |
-| App installation | Signed installation and launch commands succeeded through 0.6.1. Latest rendering and remote feel still need physical observation. |
-| App launch and Home | Netflix/YouTube launch and physical Home from Netflix were confirmed on the reference setup. |
-| Still open | Normal power-on after streaming/Art Mode, corrected Smart Hub escape and native Art Mode destinations need definite physical checks. |
-| Other TVs | Web installation target: Tizen 5.0+. See the attributed [device reports](docs/compatibility.md) for tested flows and omissions. Android TV, Google TV, LG webOS and Roku need separate implementations. |
-
-The optional [2020 LS03T profile](scripts/native-home/frame-2020/README.md) supplies experimental owner-configured native source. It leaves the reference helper unchanged and is not an unattended installer.
-
-The detailed [device record](docs/tv-status.md) separates observed results from SDK responses. Native Home/startup uses undocumented, guarded helpers; it is optional and can fail after firmware changes. Keep a recovery baseline before attempting that work. The app can be opened manually without it.
-
-## Develop and check
-
-```sh
-npm run check
-npm run check:tools
-npx playwright install chromium
-CLEANFRAME_PUBLIC_FONTS=1 npm run check:browser
-npm run check:public
-npm run export:public
-```
-
-`npm run check:duo` drives the Duo layout with a simulated TV and skips itself without the private files. `npm run package:unsigned` writes a personal `dist/CleanFrame-unsigned.wgt` for your own signing route; it can hold private fonts and the Duo files, so keep it private.
-
-`npm run check`, including its `check:device` command, runs only source checks and synthetic device-adapter tests. It never connects to a TV. The browser checks use isolated Chromium profiles and a loopback preview. They never contact a TV. The public export creates `dist/CleanFrame-public-unsigned.wgt`, with public fonts and notices. It needs your own identity and signing before installation. It does not certify asset redistribution rights or device compatibility.
-
-| Location | Purpose |
-| --- | --- |
-| `app/` | Current packaged UI and runtime assets |
-| `scripts/` | Preview, validation, asset generation and reference TV tools |
-| [Development](docs/development.md) / [testing](docs/testing.md) | Runtime map, preferences, checks and device boundaries |
-| [Assets](docs/assets.md) / [third-party notices](THIRD_PARTY_NOTICES.md) | Rendering recipes, font separation and asset provenance |
-| [Asset sources](docs/asset-sources.md) | Photo credits and verification of the bundled third-party assets |
-| `.local/`, `dist/` | Ignored private setup, recovery data, generated files and packages |
-
-## Contribute
-
-Fork it, experiment and build something that suits your TV. If you find a useful fix or improve the setup instructions, contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before a larger change. Reports should include model, firmware and the observed result, with private identifiers removed.
-
-## Licence and credits
-
-CleanFrame's original code and documentation use the [MIT licence](LICENSE). Fonts, photographs and logos retain their own terms; read [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Paid Pangram binaries are excluded from Git and public exports. A local package may include them, so keep personal builds separate from public downloads.
-
-The [release review](docs/public-release.md) records the publication checks. Third-party assets retain the terms listed in their notices. CleanFrame is an independent project with no Samsung or streaming-service affiliation.
-
-[TV Detox](https://github.com/Ansub/tv-detox) is a useful example of making an agent-assisted TV project approachable. Its Android setup is a different implementation; the prompts and instructions here are written for CleanFrame and Tizen.
+This is an independent project, not affiliated with Samsung, Apple or any streaming service. It contains no Apple imagery, and its clock digits are original drawings.

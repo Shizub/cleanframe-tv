@@ -1,6 +1,12 @@
 # Public release review
 
-The original publication record below was prepared 20 October 2026. For the current release, use the GitHub release notes and the validation results for its exact revision. CleanFrame began on one personal Samsung The Frame. Very little portability work has been done. The README presents it as a starting point to fork and adapt at the user's own risk.
+## This repository
+
+This repository continues CleanFrame 0.7.0 by Nathan Clark under the MIT licence. Its history starts from a snapshot of his last public commit, followed by the actual commits of the Duo work with their original dates. The town used for the weather during development was replaced by Paris across that history, and private files were never part of it: signing keys, the owner's certificate, TV addresses and a personal wallpaper all stay in ignored `.local/`. `npm run check:public` scans the working tree and every reachable commit, and fails if a public wallpaper has no credit.
+
+## Upstream record
+
+The publication record below is Nathan Clark's, for the original project. It was prepared 20 October 2026. For the current release, use the GitHub release notes and the validation results for its exact revision. CleanFrame began on one personal Samsung The Frame. Very little portability work has been done. The README presents it as a starting point to fork and adapt at the user's own risk.
 
 ## Source boundary
 
