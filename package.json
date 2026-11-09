@@ -1,8 +1,10 @@
 {
   "name": "cleanframe",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
-  "description": "A personal, uncluttered home interface for Samsung The Frame.",
+  "description": "A glassy, remote-first home screen for Samsung The Frame.",
+  "author": "Tristan Franceschetti",
+  "repository": "github:Shizub/cleanframe-tv",
   "scripts": {
     "dev": "python3 scripts/preview.py",
     "check": "npm run lint && python3 scripts/check.py && npm run check:device && npm run check:motion && npm run check:sound",
@@ -21,7 +23,9 @@
     "check:motion": "node --test scripts/test-motion.mjs",
     "check:sound": "node --test scripts/test-sound.mjs",
     "check:duo": "node scripts/check-duo.mjs",
-    "check:performance": "node scripts/check-performance.mjs"
+    "check:performance": "node scripts/check-performance.mjs",
+    "duo:add": "node scripts/duo-pack/add-wallpaper.mjs",
+    "demo": "python3 scripts/build-demo.py"
   },
   "devDependencies": {
     "eslint": "10.13.0",

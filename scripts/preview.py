@@ -17,7 +17,7 @@ class Preview(SimpleHTTPRequestHandler):
     def send_head(self):
         route = unquote(urlsplit(self.path).path)
         if route in ['/home/assets/font-catalog.js', '/home/assets/private-fonts.css', '/home/assets/duo-catalog.js'] or route.startswith(('/home/assets/private-fonts/', '/home/assets/duo/')):
-            source = font_overlay(include_private=self.server.include_private_fonts).get(route[len('/home/'):])
+            source = self.server.overlay.get(route[len('/home/'):])
             if source is None:
                 self.send_error(404, 'File not found')
                 return None
@@ -59,8 +59,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=4795)
     parser.add_argument('--public-fonts', action='store_true', help='Use only the fonts distributed with the source')
+    parser.add_argument('--no-duo', action='store_true', help='Serve no Duo images, so the app starts in the Dock layout')
     args = parser.parse_args()
     server = PreviewServer(('127.0.0.1', args.port), Preview)
-    server.include_private_fonts = not args.public_fonts
+    # Read once: with many wallpapers, scanning their folders on each request would slow the page down.
+    server.overlay = font_overlay(include_private=not args.public_fonts, include_duo=not args.no_duo)
     print('CleanFrame preview: http://127.0.0.1:' + str(server.server_port) + '/home/', flush=True)
     server.serve_forever()

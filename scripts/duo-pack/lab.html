@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Duo glass lab</title>
+<style>
+html,body{margin:0;background:#141416;color:#eee;font:14px sans-serif}
+#host{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;visibility:hidden}
+</style>
+<script>
+// Render at the TV's exact scale, whatever the window.
+Object.defineProperty(window, 'devicePixelRatio', { get: function () { return 1; } });
+Object.defineProperty(window, 'innerWidth', { get: function () { return 1920; } });
+Object.defineProperty(window, 'innerHeight', { get: function () { return 1080; } });
+</script>
+</head>
+<body>
+<div id="host"></div>
+<script type="module">
+import { LiquidGlassWebGLV2 } from '/renderer/v2.js';
+
+const W = 1920, H = 1080;
+const host = document.getElementById('host');
+
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('image ' + url));
+    image.src = url;
+  });
+}
+
+function canvas2d(width = W, height = H) {
+  const c = document.createElement('canvas');
+  c.width = width; c.height = height;
+  return c;
+}
+
+function savePng(name, canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(async (blob) => {
+      const response = await fetch('/save/' + name, { method: 'POST', body: blob });
+      if (response.status === 204) resolve(name); else reject(new Error('save ' + name));
+    }, 'image/png');
+  });
+}
+
+/* The WebGL shader runs here, once, on a computer. The TV only ever sees the finished images. */
+async function renderGlass(wall, shapes, material) {
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = `position:absolute;left:0;top:0;width:${W}px;height:${H}px`;
+  host.appendChild(canvas);
+  const glass = new LiquidGlassWebGLV2(canvas, {
+    compositeMode: 'overlay', preserveDrawingBuffer: true, autoResize: false, respectReducedTransparency: false, material,
+  });
+  glass.setBackdrop(wall, { update: 'static', autoStart: false, shouldRender: false });
+  const results = [];
+  for (const s of shapes) {
+    glass.setElements([{ id: s.id, shape: s.w === s.h ? 'circle' : 'pill', x: s.x, y: s.y, width: s.w, height: s.h, size: s.w }], false);
+    glass.render({ force: true, dpr: 1 });
+    const piece = canvas2d();
+    piece.getContext('2d').drawImage(canvas, 0, 0);
+    results.push(piece);
+  }
+  glass.destroy?.();
+  canvas.remove();
+  return results;
+}
+
+const MATERIAL = { frost: 0.10, dispersion: 1.2, tint: 0.16, highlight: 0.5, rim: 0.36, hairline: 1.0 };
+const ROW = { pitch: 116, pad: 10, h: 136, gap: 28, y: 884, controls: 5 };
+const RING = { x: 1736, y: 60, w: 104, h: 104 };
+const VOLUME = { id: 'vol', x: 80, y: 80, w: 440, h: 64 };
+const MARGIN = 64;
+
+function rowGeometry(count) {
+  const apps = count * ROW.pitch + ROW.pad * 2;
+  const ctrl = ROW.controls * ROW.pitch + ROW.pad * 2;
+  const x = Math.round((W - (apps + ROW.gap + ctrl)) / 2);
+  return { apps: { x, y: ROW.y, w: apps, h: ROW.h }, ctrl: { x: x + apps + ROW.gap, y: ROW.y, w: ctrl, h: ROW.h } };
+}
+
+function capsulePath(ctx, s) {
+  ctx.beginPath();
+  ctx.roundRect(s.x, s.y, s.w, s.h, Math.min(s.w, s.h) / 2);
+}
+
+// Glass flattened on its own backdrop, with a soft shadow that stops at the glass edge.
+function flatten(wall, piece, s, shadowAlpha) {
+  const x = s.x - MARGIN, y = s.y - MARGIN;
+  const w = s.w + MARGIN * 2, h = Math.min(s.h + MARGIN * 2, H - y);
+  const out = canvas2d(w, h);
+  const ctx = out.getContext('2d');
+  ctx.translate(-x, -y);
+  ctx.save();
+  ctx.shadowColor = `rgba(0,0,0,${shadowAlpha})`;
+  ctx.shadowBlur = 36;
+  ctx.shadowOffsetY = 10;
+  ctx.fillStyle = '#000';
+  capsulePath(ctx, s);
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  capsulePath(ctx, s);
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  capsulePath(ctx, s);
+  ctx.clip();
+  ctx.drawImage(wall, 0, 0, W, H);
+  ctx.drawImage(piece, 0, 0, W, H);
+  ctx.restore();
+  return { canvas: out, x, y, w, h };
+}
+
+/* The ring, the volume pill, and both capsules for one to nine apps, by day and by night. */
+window.bakeGlass = async () => {
+  const manifest = {};
+  for (const scheme of ['day', 'night']) {
+    const wall = await loadImage(`/walls/wall-${scheme}.png`);
+    const shapes = [{ id: 'ring', ...RING }, VOLUME];
+    for (let n = 1; n <= 9; n++) {
+      const g = rowGeometry(n);
+      shapes.push({ id: 'apps' + n, ...g.apps }, { id: 'ctrl' + n, ...g.ctrl });
+    }
+    const pieces = await renderGlass(wall, shapes, MATERIAL);
+    for (let i = 0; i < shapes.length; i++) {
+      const s = shapes[i];
+      const flat = flatten(wall, pieces[i], s, scheme === 'day' ? 0.24 : 0.42);
+      await savePng(`glass-${s.id}-${scheme}.png`, flat.canvas);
+      manifest[s.id] = { x: flat.x, y: flat.y, w: flat.w, h: flat.h };
+    }
+  }
+  await fetch('/save/glass-manifest.json', { method: 'POST', body: JSON.stringify(manifest) });
+  return Object.keys(manifest).length;
+};
+
+/* Round app tiles, baked at twice their display size. */
+const TILE = 232;
+const TILES = {
+  netflix: { bg: ['#222224', '#060606'], ink: '#E50914', size: 118 },
+  youtube: { bg: ['#ffffff', '#e8e8ee'], ink: '#FF0033', size: 124 },
+  primevideo: { bg: ['#25b4f5', '#0a6dd8'], ink: '#ffffff', size: 142 },
+  disneyplus: { bg: ['#1c2f7c', '#0a1240'], ink: '#ffffff', size: 142 },
+  appletv: { bg: ['#48484c', '#111113'], ink: '#ffffff', size: 132 },
+  spotify: { bg: ['#262323', '#0b0909'], ink: '#1ED760', size: 134 },
+  hbomax: { bg: ['#6a37f0', '#260d78'], ink: '#ffffff', size: 142 },
+  applemusic: { bg: ['#ff6478', '#f4213c'], ink: '#ffffff', size: 112 },
+  tubi: { bg: ['#fff04d', '#ffcf00'], ink: '#3b1a78', size: 128 },
+  stremio: { bg: ['#8a6cf8', '#4a2fc4'], ink: '#ffffff', size: 120 },
+};
+// Services and devices without a licensed mark get plain initials, set in Manrope.
+const MONOGRAMS = {
+  mycanal: { text: 'C+', bg: ['#2b2b2e', '#050505'] },
+  francetv: { text: 'fr', bg: ['#2c6cf5', '#123fb0'] },
+  arte: { text: 'ar', bg: ['#ff8a3d', '#e8560c'] },
+  twitch: { text: 'Tw', bg: ['#a970ff', '#6a2fd6'] },
+  deezer: { text: 'Dz', bg: ['#b34bff', '#5a1fc0'] },
+  plex: { text: 'Px', bg: ['#3a3f46', '#15171a'] },
+  nintendoswitch: { text: 'Sw', bg: ['#ff3347', '#d4001a'] },
+  playstation: { text: 'PS', bg: ['#2a7de1', '#00439c'] },
+  xbox: { text: 'X', bg: ['#2fb12f', '#0e6b0e'] },
+};
+const HDMI_TILE = {
+  bg: ['#5a5a60', '#1e1e22'], size: 170,
+  svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1024" height="1024" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M2.5 8h19v5.2L19 16H5l-2.5-2.8Z"/><path d="M6.5 11.6h11" stroke-linecap="round"/></svg>',
+};
+
+function tileBase(ctx, stops) {
+  const r = TILE / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(r, r, r - 1, 0, Math.PI * 2);
+  ctx.clip();
+  const g = ctx.createLinearGradient(0, 0, 0, TILE);
+  g.addColorStop(0, stops[0]);
+  g.addColorStop(1, stops[1]);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, TILE, TILE);
+  ctx.restore();
+}
+
+function tileFinish(ctx) {
+  const r = TILE / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(r, r, r - 1, 0, Math.PI * 2);
+  ctx.clip();
+  const sheen = ctx.createLinearGradient(0, 0, 0, TILE * 0.55);
+  sheen.addColorStop(0, 'rgba(255,255,255,.20)');
+  sheen.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(0, 0, TILE, TILE);
+  ctx.restore();
+  const rim = ctx.createLinearGradient(0, 0, 0, TILE);
+  rim.addColorStop(0, 'rgba(255,255,255,.55)');
+  rim.addColorStop(0.5, 'rgba(255,255,255,.10)');
+  rim.addColorStop(1, 'rgba(255,255,255,.22)');
+  ctx.strokeStyle = rim;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(r, r, r - 2, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+window.bakeIcons = async () => {
+  const font = new FontFace('Manrope', 'url(/fonts/manrope.woff2)', { weight: '200 800' });
+  document.fonts.add(await font.load());
+  await new Promise((resolve) => {
+    const s = document.createElement('script');
+    s.src = '/icons/metrics.js';
+    s.onload = resolve;
+    document.head.appendChild(s);
+  });
+  const metrics = window.FrameIconMetrics;
+  for (const [id, t] of Object.entries(TILES)) {
+    const text = await (await fetch(`/icons/${id}.svg`)).text();
+    const colored = text.replace(/fill="(?:#ffffff|#fff|white)"/gi, `fill="${t.ink}"`);
+    const svg = colored.includes('width=') ? colored : colored.replace('<svg ', '<svg width="1024" height="1024" ');
+    const image = await loadImage('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
+    const out = canvas2d(TILE, TILE);
+    const ctx = out.getContext('2d');
+    tileBase(ctx, t.bg);
+    const m = metrics[id];
+    const k = t.size / Math.max(m.w, m.h);
+    ctx.drawImage(image, TILE / 2 - (m.x + m.w / 2) * k, TILE / 2 - (m.y + m.h / 2) * k, m.n * k, m.n * k);
+    tileFinish(ctx);
+    await savePng(`icon-${id}.png`, out);
+  }
+  for (const [id, t] of Object.entries(MONOGRAMS)) {
+    const out = canvas2d(TILE, TILE);
+    const ctx = out.getContext('2d');
+    tileBase(ctx, t.bg);
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 92px Manrope';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(t.text, TILE / 2, TILE / 2 + 5);
+    tileFinish(ctx);
+    await savePng(`icon-${id}.png`, out);
+  }
+  const hdmi = await loadImage('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(HDMI_TILE.svg));
+  const out = canvas2d(TILE, TILE);
+  const ctx = out.getContext('2d');
+  tileBase(ctx, HDMI_TILE.bg);
+  ctx.drawImage(hdmi, (TILE - HDMI_TILE.size) / 2, (TILE - HDMI_TILE.size) / 2, HDMI_TILE.size, HDMI_TILE.size);
+  tileFinish(ctx);
+  await savePng('icon-hdmi.png', out);
+};
+
+/* Control glyphs: white, with a soft shadow already baked in. */
+const GLYPHS = {
+  art: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="9.8" r="1.5"/><path d="m4.5 17.5 4.5-4.5 3 3 2.5-2.5 5 5"/>',
+  inputs: '<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8.5 20h7"/>',
+  apps: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/>',
+  samsung: '<path d="M4 11 12 4.5l8 6.5v8a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1Z"/>',
+  settings: '<path d="m9 3-.6 2.4-2 1.2L4 6l-2 3.5L3.8 11v2L2 14.5 4 18l2.4-.6 2 1.2L9 21h6l.6-2.4 2-1.2 2.4.6 2-3.5-1.8-1.5v-2L22 9.5 20 6l-2.4.6-2-1.2L15 3Z"/><circle cx="12" cy="12" r="3.2"/>',
+};
+window.bakeGlyphs = async () => {
+  for (const [id, path] of Object.entries(GLYPHS)) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+    const image = await loadImage('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
+    const out = canvas2d(148, 148);
+    const ctx = out.getContext('2d');
+    ctx.shadowColor = 'rgba(24,16,6,.42)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 2;
+    ctx.drawImage(image, 24, 24, 100, 100);
+    await savePng(`glyph-${id}.png`, out);
+  }
+};
+window.labReady = true;
+</script>
+</body>
+</html>

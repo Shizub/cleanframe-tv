@@ -121,6 +121,15 @@ for path in private_fonts:
     if git('hash-object', str(path)).decode().strip() in object_ids:
         findings.append('Known proprietary font bytes in Git history: ' + path.name)
 
+# A public wallpaper states whose picture it is, so one without a licence cannot slip in unnoticed.
+for theme in sorted((ROOT / 'duo-pack/themes').glob('*/')):
+    try:
+        credit = json.loads((theme / 'theme.json').read_text()).get('credit')
+    except (OSError, ValueError):
+        credit = None
+    if not credit:
+        findings.append('Public Duo wallpaper without a credit: ' + theme.name)
+
 for name in ['app/assets/fonts/geist/OFL.txt', 'app/assets/fonts/newsreader/OFL.txt', 'app/assets/manrope-OFL.txt']:
     if not (ROOT / name).is_file():
         findings.append('Missing public font licence: ' + name)

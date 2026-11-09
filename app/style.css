@@ -118,6 +118,16 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .duo-cell.is-focus .duo-cell-name{opacity:1}
 .duo-cell-badge{position:absolute;left:188px;top:18px;width:40px;height:40px;border-radius:20px;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.28)}
 .duo-card .duo-cell-badge .ico{position:absolute;left:8px;top:8px;width:24px;height:24px;stroke:#111;stroke-width:2.4}
+.duo-wall{position:absolute;width:348px;height:266px;text-align:center}
+.duo-wall-tile{position:relative;width:320px;height:180px;margin:12px auto 0}
+.duo-wall-tile>img{display:block;width:320px;height:180px;border-radius:20px;box-shadow:0 6px 20px rgba(0,0,0,.24)}
+.duo-wall-ring{position:absolute;left:-8px;top:-8px;right:-8px;bottom:-8px;border:4px solid #fff;border-radius:28px;opacity:0;transition:opacity .12s linear}
+.sch-day .duo-wall-ring{border-color:#17171b}
+.duo-wall.is-focus .duo-wall-ring{opacity:1}
+.duo-wall-tile .duo-cell-badge{left:auto;right:12px;top:12px;opacity:0;transition:opacity .14s linear}
+.duo-wall.is-checked .duo-cell-badge{opacity:1}
+.duo-wall-name{display:block;margin-top:16px;padding:0 12px;font-size:28px;line-height:36px;font-weight:500;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .16s linear}
+.duo-wall.is-focus .duo-wall-name{opacity:1}
 .duo-column-title{position:absolute;top:128px;font-size:28px;line-height:36px;font-weight:600;opacity:.66;white-space:nowrap}
 .duo-count{display:inline-block}
 .duo-edit-status{position:absolute;left:804px;right:64px;top:176px;font-size:28px;line-height:36px;opacity:.66}

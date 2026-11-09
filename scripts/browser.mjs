@@ -31,7 +31,8 @@ export async function networkQuiet(page, quietMs = 500) {
 
 export async function openPreview({ publicFonts = false, duo = false } = {}) {
   const args = ['scripts/preview.py', '--port', '0'];
-  // The Duo checks need the private files, whatever the rest of the run asks for.
+  // Only the Duo checks see the Duo images: every other tool drives the List and Dock layouts.
+  if (!duo) args.push('--no-duo');
   if (!duo && (publicFonts || process.env.CLEANFRAME_PUBLIC_FONTS === '1')) args.push('--public-fonts');
   const server = spawn('python3', args, {
     cwd: root, stdio: ['ignore', 'pipe', 'pipe']

@@ -13,6 +13,8 @@ from private_files import check_widget, generated_path, private_path, secret_con
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_FONT_IDS = ['geist', 'newsreader']
+DEFAULT_DUO_WALL, PRIVATE_DUO_WALL = 'amber', 'perso'
+DUO_THEME_FILES = ['wall-day.webp', 'wall-night.webp', 'frost-day.webp', 'frost-night.webp', 'thumb.webp']
 PRIVATE_FONTS = [
     {
         'id': 'montreal', 'family': 'Study Montreal', 'folder': 'neue-montreal',
@@ -41,24 +43,60 @@ def is_runtime_source(name):
     return not re.fullmatch(r'assets/wallpapers/[^/]+-glass-\d+\.png', name)
 
 
-def duo_overlay(root):
-    """The Duo layout's wallpaper and glass come from a private image, so they stay in .local/duo/."""
-    source = (root / '.local/duo').resolve()
+def duo_theme(folder, theme_id, fallback_name):
+    """One Duo wallpaper with everything baked on it, or None when the folder holds no finished bake."""
+    folder = folder.resolve()
     try:
-        glass = json.loads((source / 'glass/manifest.json').read_text())
+        glass = json.loads((folder / 'glass/manifest.json').read_text())
     except (OSError, ValueError):
+        return None
+    try:
+        info = json.loads((folder / 'theme.json').read_text())
+    except (OSError, ValueError):
+        info = {}
+    files = {}
+    for path in [folder / name for name in DUO_THEME_FILES] + sorted((folder / 'glass').glob('*.webp')):
+        # Exclude symlinks that leave the folder.
+        if path.is_file() and path.resolve().is_relative_to(folder):
+            files['assets/duo/themes/' + theme_id + '/' + path.relative_to(folder).as_posix()] = path
+    return {'id': theme_id, 'name': info.get('name') or fallback_name, 'glass': glass, 'files': files,
+            'thumb': (folder / 'thumb.webp').is_file()}
+
+
+def duo_overlay(root, include_private=True):
+    """Duo's wallpapers: the public ones in duo-pack/, and in a personal build an owner's own from .local/, which come first."""
+    pack, private = root / 'duo-pack', root / '.local/duo'
+    candidates = []
+    if include_private:
+        candidates.append((private, PRIVATE_DUO_WALL, 'Dunes'))
+        candidates += [(folder, folder.name, folder.name) for folder in sorted((root / '.local/duo-themes').glob('*/'))]
+    public = sorted((pack / 'themes').glob('*/'), key=lambda folder: (folder.name != DEFAULT_DUO_WALL, folder.name))
+    candidates += [(folder, folder.name, folder.name) for folder in public]
+    themes = {}
+    for folder, theme_id, name in candidates:
+        theme = duo_theme(folder, theme_id, name) if re.fullmatch(r'[a-z0-9-]+', theme_id) else None
+        # Every wallpaper shares one geometry, because the app places the glass from a single manifest.
+        if theme and theme_id not in themes and (not themes or theme['glass'] == next(iter(themes.values()))['glass']):
+            themes[theme_id] = theme
+    if not themes:
         return {}
     assets = {}
-    for path in sorted(source.rglob('*.webp')):
-        # Exclude symlinks that leave the private folder.
-        if path.resolve().is_relative_to(source) and path.is_file():
-            assets['assets/duo/' + path.relative_to(source).as_posix()] = path
-    catalog = {'glass': glass, 'icons': sorted(path.stem for path in source.glob('icons/*.webp'))}
-    assets['assets/duo-catalog.js'] = ('window.CleanFrameDuo = ' + json.dumps(catalog, separators=(',', ':')) + ';\n').encode()
+    for source in ([private] if include_private else []) + [pack]:
+        source = source.resolve()
+        for path in sorted(list(source.glob('icons/*.webp')) + list(source.glob('ui/*.webp'))):
+            if path.resolve().is_relative_to(source) and path.is_file():
+                assets.setdefault('assets/duo/' + path.relative_to(source).as_posix(), path)
+    for theme in themes.values():
+        assets.update(theme['files'])
+    listed = list(themes.values())
+    default = PRIVATE_DUO_WALL if PRIVATE_DUO_WALL in themes else DEFAULT_DUO_WALL if DEFAULT_DUO_WALL in themes else listed[0]['id']
+    catalog = {'glass': listed[0]['glass'], 'icons': sorted(name[len('assets/duo/icons/'):-len('.webp')] for name in assets if name.startswith('assets/duo/icons/')),
+               'walls': [{'id': theme['id'], 'name': theme['name'], 'thumb': theme['thumb']} for theme in listed], 'wall': default}
+    assets['assets/duo-catalog.js'] = ('window.CleanFrameDuo = ' + json.dumps(catalog, separators=(',', ':'), ensure_ascii=False) + ';\n').encode()
     return assets
 
 
-def font_overlay(root=ROOT, include_private=True):
+def font_overlay(root=ROOT, include_private=True, include_duo=True):
     """Return package-relative paths mapped to bytes or allowlisted private files."""
     sources = (root / '.local/research/font-candidates').resolve()
     assets = {}
@@ -81,8 +119,8 @@ def font_overlay(root=ROOT, include_private=True):
     assets['assets/font-catalog.js'] = ('window.CleanFramePrivateFontIDs = '
                                        + json.dumps(private_ids + PUBLIC_FONT_IDS) + ';\n').encode()
     assets['assets/duo-catalog.js'] = b'window.CleanFrameDuo = null;\n'
-    if include_private:
-        assets.update(duo_overlay(root))
+    if include_duo:
+        assets.update(duo_overlay(root, include_private))
     return assets
 
 

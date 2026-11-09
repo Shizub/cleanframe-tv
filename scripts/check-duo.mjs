@@ -1,11 +1,11 @@
-// Duo layout in fresh browsers with a simulated TV. It needs the private files in .local/duo/, so a public checkout skips it.
+// Duo layout in fresh browsers with a simulated TV, using .local/duo/ when present and the public duo-pack/ otherwise.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { launchOptions, networkQuiet, openPreview, root } from './browser.mjs';
 
-if (!existsSync(root + '.local/duo/glass/manifest.json')) {
-  console.log('Duo checks skipped: this checkout has no private files in .local/duo/.');
+if (!existsSync(root + '.local/duo/glass/manifest.json') && !existsSync(root + 'duo-pack/themes')) {
+  console.log('Duo checks skipped: this checkout has neither .local/duo/ nor duo-pack/.');
   process.exit(0);
 }
 
@@ -174,7 +174,7 @@ try {
       if (target.id !== 'duoHome' || target.className.includes('is-arriving') || window.__walls) return;
       window.__walls = ['duoDayImg', 'duoNightImg'].map(id => ({ width: document.getElementById(id).naturalWidth, decoding: document.getElementById(id).decoding }));
     })).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'] });
-    let page = await open({ wait: false, prepare: async p => { await p.addInitScript(watch); await p.route('**/assets/duo/wall-*.webp', async route => { await held; await route.continue(); }); } });
+    let page = await open({ wait: false, prepare: async p => { await p.addInitScript(watch); await p.route('**/assets/duo/themes/*/wall-*.webp', async route => { await held; await route.continue(); }); } });
     await waiting(page);
     check('it goes into hiding at once, with no fade', await page.evaluate(() => getComputedStyle(document.getElementById('duoHome')).transitionDuration) === '0s');
     await page.waitForFunction(() => Array.prototype.every.call(document.querySelectorAll('#duoHome img'), im => im.complete));
@@ -187,15 +187,15 @@ try {
     check('and drawn with everything else, not after', walls.every(wall => wall.decoding === 'sync'), walls);
     check('then the launcher arrives whole', await page.evaluate(() => document.getElementById('duoDayImg').naturalWidth > 0 && document.getElementById('duoHome').className === 'duo-home'));
     await page.context().close();
-    page = await open({ prepare: p => p.route('**/assets/duo/glass/ring-*.webp', route => route.abort()) });
+    page = await open({ prepare: p => p.route('**/assets/duo/themes/*/glass/ring-*.webp', route => route.abort()) });
     await arrived(page);
     check('a missing image does not hold it', await opacity(page) === '1', await opacity(page));
     await page.context().close();
-    page = await open({ wait: false, prepare: p => p.route('**/assets/duo/wall-night.webp', route => route.abort()) });
+    page = await open({ wait: false, prepare: p => p.route('**/assets/duo/themes/*/wall-night.webp', route => route.abort()) });
     await waiting(page); await arrived(page);
     check('nor does a missing wallpaper', await opacity(page) === '1' && (await where(page)).focusCount === 1, await opacity(page));
     await page.context().close();
-    page = await open({ wait: false, prepare: p => p.route('**/assets/duo/wall-night.webp', () => {}) });
+    page = await open({ wait: false, prepare: p => p.route('**/assets/duo/themes/*/wall-night.webp', () => {}) });
     await waiting(page); await page.waitForTimeout(3000);
     check('nor does one that never comes', await opacity(page) === '1' && (await where(page)).focusCount === 1, await opacity(page));
     await page.context().close();
@@ -317,7 +317,7 @@ try {
     check('Settings opens', (await where(page)).view === 'settings', await where(page));
     const rows = await page.evaluate(() => ShoreQA.actions());
     check('Settings only offers what Duo uses', rows.some(a => /scheme/.test(a)) && !rows.some(a => /background|typography|focus/.test(a)), rows);
-    for (let i = 0; i < 3; i++) await nav(page, 'down');
+    for (let i = 0; i < 4; i++) await nav(page, 'down');
     await nav(page, 'ok'); await settled(page);
     check('Apps on Home opens the editor', (await where(page)).view === 'editor', await where(page));
     await page.waitForFunction(() => ShoreQA.state().catalog.loaded);
@@ -415,11 +415,11 @@ try {
     check('the old panels stay out of the way', around.sheet && around.details, around);
     check('the clock and the row step aside', await value(page, '#duoFace', 'o') === 0);
     check('one selection stays active', (await where(page)).focusCount === 1, await where(page));
-    check('Settings only lists what Duo uses', c.rows.join() === 'Apparence,Disposition,Sons,Applis de l’accueil,Samsung', c.rows);
+    check('Settings only lists what Duo uses', c.rows.join() === 'Apparence,Fond d’écran,Disposition,Sons,Applis de l’accueil,Samsung', c.rows);
 
     await nav(page, 'down'); await rested(page);
     c = await card(page);
-    check('the plate follows the selection', Math.abs((c.plate.t + c.plate.b) - (c.focus.t + c.focus.b)) <= 2 && (await where(page)).focusAction === 'settings.group.layout', c);
+    check('the plate follows the selection', Math.abs((c.plate.t + c.plate.b) - (c.focus.t + c.focus.b)) <= 2 && (await where(page)).focusAction === 'settings.group.duoWall', c);
     await nav(page, 'up'); await rested(page);
     const atTop = (await card(page)).plate;
     await page.keyboard.press('ArrowUp');
@@ -462,7 +462,7 @@ try {
   {
     const page = await open();
     await openFromHome(page, 'util.settings');
-    await nav(page, 'down', 'ok'); await rested(page);
+    await nav(page, 'down', 'down', 'ok'); await rested(page);
     let c = await card(page);
     check('Layout is a plain list', c.title === 'Disposition' && c.rows.join() === 'Liste,Barre,Duo' && c.checked.join() === 'Duo', c);
     const layouts = await page.evaluate(() => ShoreQA.actions());
@@ -557,7 +557,7 @@ try {
     const y = id => page.evaluate(line => { const list = Array.prototype.filter.call(document.querySelectorAll('.duo-eline'), el => el.querySelector('.duo-eline-name').textContent === line); return window.Motion.valueOf(list[0]).y; }, id);
     const dock = () => saved(page).then(c => c.dock);
     await openFromHome(page, 'util.settings');
-    await nav(page, 'down', 'down', 'down', 'ok');
+    await nav(page, 'down', 'down', 'down', 'down', 'ok');
     await page.waitForFunction(() => ShoreQA.state().catalog.loaded); await rested(page);
     check('the editor is one card', (await card(page)).count === 1 && (await card(page)).title === 'Applis de l’accueil', await card(page));
     check('it starts on the app selected on Home', (await where(page)).focusAction === 'editor.move.spotify' && (await where(page)).focusCount === 1, await where(page));
@@ -598,7 +598,7 @@ try {
   {
     const page = await open({ home: ['netflix'] });
     await openFromHome(page, 'util.settings');
-    await nav(page, 'down', 'down', 'down', 'ok'); await rested(page);
+    await nav(page, 'down', 'down', 'down', 'down', 'ok'); await rested(page);
     await nav(page, 'right', 'ok'); await rested(page);
     check('the last app stays', (await state(page)).home.join() === 'netflix' && /garder une appli/.test(await toast(page)), await toast(page));
     await page.context().close();
@@ -606,7 +606,7 @@ try {
   {
     const page = await open({ home: DEFAULTS.concat(EXTRA), more: 20 });
     await openFromHome(page, 'util.settings');
-    await nav(page, 'down', 'down', 'down', 'ok');
+    await nav(page, 'down', 'down', 'down', 'down', 'ok');
     await page.waitForFunction(() => ShoreQA.state().catalog.loaded); await rested(page);
     const rows = await page.evaluate(() => Array.prototype.filter.call(document.querySelectorAll('.duo-eline.is-home'), () => true).map(el => window.Motion.valueOf(el).y));
     check('nine apps fit without a scroll hint', rows.length === 9 && rows.every((top, i) => !i || top - rows[i - 1] === 76) && rows[8] + 72 <= 704, rows);
@@ -761,7 +761,7 @@ try {
     const page = await open({ home: ['hdmi2', 'netflix', 'youtube'] });
     await loaded(page);
     await openFromHome(page, 'util.settings');
-    await nav(page, 'down', 'down', 'down', 'ok'); await rested(page);
+    await nav(page, 'down', 'down', 'down', 'down', 'ok'); await rested(page);
     await page.evaluate(() => ShoreQA.activate('editor.remove.youtube')); await rested(page);
     check('a removed app waits in the recent ones', (await state(page)).recent.join() === 'youtube', (await state(page)).recent);
     await uninstall(page, 'org.tizen.netflix-app', '9Ur5IzDKqV.TizenYouTube');
@@ -795,7 +795,7 @@ try {
     const page = await open();
     await loaded(page);
     await openFromHome(page, 'util.settings');
-    await nav(page, 'down', 'down', 'down', 'ok'); await rested(page);
+    await nav(page, 'down', 'down', 'down', 'down', 'ok'); await rested(page);
     await nav(page, 'ok');
     const draft = (await state(page)).draft;
     await uninstall(page, 'org.tizen.netflix-app');
@@ -884,7 +884,7 @@ try {
     const page = await open({ home: ['netflix'] });
     await soundReady(page);
     await openFromHome(page, 'util.settings');
-    await nav(page, 'down', 'down', 'down', 'ok'); await rested(page);
+    await nav(page, 'down', 'down', 'down', 'down', 'ok'); await rested(page);
     await nav(page, 'right');
     check('a refusal is two knocks', await hear(page, 'Enter') === 'error', await heard(page));
     await page.context().close();
@@ -942,7 +942,7 @@ try {
     await page.evaluate(() => ShoreQA.look({ scheme: 'night' }));
     check('the night is softer and less bright', Math.abs((await level())[0] - .28) < .001 && (await level())[1] === 3000, await level());
     await page.evaluate(() => ShoreQA.look({ scheme: 'day' }));
-    await goTo(page, 'util.settings'); await nav(page, 'ok', 'down', 'down'); await nav(page, 'ok'); await rested(page);
+    await goTo(page, 'util.settings'); await nav(page, 'ok', 'down', 'down', 'down'); await nav(page, 'ok'); await rested(page);
     let c = await card(page);
     check('Sons offers its levels and its style', c.title === 'Sons' && c.rows.join() === 'Normal,Discret,Coupés,Style de son,Sortie du son' && c.checked.join() === 'Discret' && (await where(page)).focusAction === 'choice.sound.discret', [c, await where(page)]);
     check('it says what the night does', /nuit/.test(c.sub), c.sub);
@@ -975,7 +975,7 @@ try {
     await page.waitForTimeout(100);
     check('a restart reads only that style', page.sounds.join() === 'bois.pcm' && (await state(page)).sound === 'normal', page.sounds);
     check('and it is silent, whatever the style', await heard(page) === '', await heard(page));
-    await goTo(page, 'util.settings'); await nav(page, 'ok', 'down', 'down', 'ok', 'down', 'down', 'down', 'down', 'ok'); await settled(page);
+    await goTo(page, 'util.settings'); await nav(page, 'ok', 'down', 'down', 'down', 'ok', 'down', 'down', 'down', 'down', 'ok'); await settled(page);
     check('Sortie du son opens the TV\'s settings', (await tv(page)).launched.at(-1) === 'com.samsung.tv.coba.setting', (await tv(page)).launched);
     await page.context().close();
   }
@@ -1151,7 +1151,7 @@ try {
     await both(async page => { await volumeKey(page, 'up'); await rested(page); });
     off = await drift(['#duoVol', '#duoVol img', '.duo-vol-track', '.duo-vol-value']);
     check('so does the volume pill', off.length === 0, off);
-    await both(async page => { await goTo(page, 'util.settings'); await nav(page, 'ok', 'down', 'down', 'ok'); await rested(page); });
+    await both(async page => { await goTo(page, 'util.settings'); await nav(page, 'ok', 'down', 'down', 'down', 'ok'); await rested(page); });
     off = await drift(['.duo-card', '.duo-card-field', '.duo-plate', '.duo-line.is-focus']);
     check('so does a card and its frost', off.length === 0, off);
     await both(async page => { await nav(page, 'back', 'back'); await rested(page); await openFromHome(page, 'util.apps'); await loaded(page); await rested(page); });
@@ -1204,7 +1204,7 @@ try {
       return { heap: metrics.find(m => m.name === 'JSHeapUsedSize').value, nodes: dom.nodes, listeners: dom.jsEventListeners, images: await page.evaluate(() => document.images.length) };
     };
     const round = async () => {
-      await goTo(page, 'util.settings'); await nav(page, 'ok', 'down', 'down', 'ok', 'down', 'down', 'ok'); await rested(page);
+      await goTo(page, 'util.settings'); await nav(page, 'ok', 'down', 'down', 'down', 'ok', 'down', 'down', 'ok'); await rested(page);
       await nav(page, 'back', 'back', 'back'); await rested(page);
       await openFromHome(page, 'util.apps'); await loaded(page); await nav(page, 'down', 'right'); await rested(page);
       await nav(page, 'back'); await rested(page);
@@ -1306,12 +1306,60 @@ try {
     console.log('Panel key p95 at 4x slowdown: list ' + list.toFixed(1) + ', grid ' + grid.toFixed(1) + ', editor ' + editor.toFixed(1) + ' ms');
     await page.context().close();
   }
+
+  /* The gallery: a wallpaper, its glass and its frost change together, and one that fails to load changes nothing. */
+  section = 'Wallpaper gallery';
+  {
+    let page = await open();
+    const { ids: walls, names } = await page.evaluate(() => ({ ids: window.CleanFrameDuo.walls.map(w => w.id), names: window.CleanFrameDuo.walls.map(w => w.name) }));
+    await page.context().close();
+    check('several wallpapers are offered', walls.length > 1, walls);
+    const [first, second, third] = walls;
+    const inSecond = src => src.includes('assets/duo/themes/' + second + '/');
+    page = await open({ prepare: p => p.route('**/assets/duo/themes/' + third + '/glass/ring-*.webp', route => route.abort()) });
+    const seen = () => page.evaluate(() => ({ day: document.getElementById('duoDayImg').getAttribute('src'), night: document.getElementById('duoNightImg').getAttribute('src'), ring: document.querySelector('#duoRing img').getAttribute('src'), apps: document.querySelector('#duoCapApps img').getAttribute('src'),
+      field: document.querySelector('.duo-card .duo-card-field').getAttribute('src'), wall: ShoreQA.state().duo.wall, saved: ShoreQA.state().duoWall, ticked: Array.prototype.map.call(document.querySelectorAll('.duo-wall.is-checked'), el => el.getAttribute('aria-label')) }));
+    await openFromHome(page, 'util.settings'); await rested(page);
+    await nav(page, 'down'); await nav(page, 'ok'); await rested(page);
+    let c = await card(page);
+    check('it opens as a single card', c.count === 1 && c.title === 'Fond d’écran', c);
+    check('the selection starts on the wallpaper in use', (await where(page)).focusAction === 'choice.duoWall.' + first, await where(page));
+    check('the wallpaper in use is ticked', (await seen()).ticked.join() === names[0], (await seen()).ticked);
+    await nav(page, 'up'); await nav(page, 'left'); await rested(page);
+    check('at the edge of the gallery a key only bounces', (await where(page)).focusAction === 'choice.duoWall.' + first, await where(page));
+    await nav(page, 'right'); await nav(page, 'ok');
+    await page.waitForFunction(id => ShoreQA.state().duoWall === id && !ShoreQA.state().pending, second);
+    await rested(page);
+    let s = await seen();
+    check('OK changes the picture, day and night', inSecond(s.day) && inSecond(s.night) && s.wall === second, s);
+    check('the glass changes with it', inSecond(s.ring) && inSecond(s.apps), s);
+    check('the frost of the card changes with it', inSecond(s.field), s);
+    check('the gallery stays open', (await card(page)).title === 'Fond d’écran', await card(page));
+    check('the new wallpaper is ticked', s.ticked.join() === names[1], s.ticked);
+    await nav(page, 'right'); await nav(page, 'ok');
+    await page.waitForFunction(() => ShoreQA.state().pending === null && document.querySelector('.duo-card .duo-top-button'));
+    s = await seen();
+    check('a wallpaper that fails to load changes nothing', s.saved === second && s.wall === second && inSecond(s.day) && inSecond(s.ring), s);
+    if (walls.length > 8) {
+      await nav(page, 'down'); await nav(page, 'down'); await rested(page);
+      const y = await page.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('.duo-card .duo-grid')).transform).m42);
+      check('the gallery scrolls with the selection', y < 0, y);
+    }
+    await nav(page, 'back'); await rested(page);
+    const value = await page.evaluate(() => { const line = document.querySelector('.duo-card:not(.is-leaving) .duo-line[aria-label="Fond d’écran"] .duo-line-value'); return line && line.textContent; });
+    check('Settings names the wallpaper', value === names[1], value);
+    await page.reload();
+    await ready(page);
+    const after = await page.evaluate(() => ({ saved: ShoreQA.state().duoWall, day: document.getElementById('duoDayImg').getAttribute('src') }));
+    check('the choice survives a restart', after.saved === second && inSecond(after.day), after);
+    await page.context().close();
+  }
 } finally {
   await preview.close();
 }
 
-/* A public preview has no Duo at all, even with a saved choice. */
-section = 'Public build';
+/* A build without the Duo images has no Duo at all, even with a saved choice. */
+section = 'Build without Duo images';
 {
   const preview = await openPreview({ publicFonts: true });
   try {
@@ -1325,11 +1373,11 @@ section = 'Public build';
     await page.waitForFunction(() => window.ShoreQA && ShoreQA.ready && ShoreQA.ready());
     check('the catalogue is empty', await page.evaluate(() => window.CleanFrameDuo === null));
     check('a saved Duo falls back to Dock', (await state(page)).layout === 'dock', (await state(page)).layout);
-    check('nothing private is asked for', !requests.some(url => url.includes('/assets/duo/')), requests.filter(url => url.includes('/assets/duo/')));
+    check('no Duo image is asked for', !requests.some(url => url.includes('/assets/duo/')), requests.filter(url => url.includes('/assets/duo/')));
     check('no sound is read for nothing', !requests.some(url => url.endsWith('.pcm')), requests.filter(url => url.endsWith('.pcm')));
     check('the volume keys stay with the TV', (await tv(page)).keys.length === 0, (await tv(page)).keys);
-    const direct = await page.evaluate(() => fetch('assets/duo/wall-day.webp').then(r => r.status));
-    check('the private files are not served', direct === 404, direct);
+    const direct = await page.evaluate(() => fetch('assets/duo/themes/amber/wall-day.webp').then(r => r.status));
+    check('the Duo images are not served', direct === 404, direct);
     await context.close();
   } finally { await preview.close(); }
 }

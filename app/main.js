@@ -47,8 +47,8 @@
     newsreader: { name: 'Newsreader', family: 'Study Newsreader', display: 400, ui: 400, clock: 400 }
   };
   var PRIVATE_FONTS = window.CleanFramePrivateFontIDs || [], fontMetrics = {}, unavailableFonts = {}, widthCache = {}, fontRevision = 0, fontsReady = false;
-  var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: DUO ? ['list', 'dock', 'duo'] : ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'], scheme: ['auto', 'day', 'night'], sound: ['normal', 'discret', 'coupes'], soundStyle: ['verre', 'goutte', 'zen', 'galet', 'bois', 'feutre', 'bronze', 'ardoise'] };
-  var LOOK_NAMES = { bg: 'Fond', layout: 'Disposition', apps: 'Applis', font: 'Police', controls: 'Commandes de l’accueil', focus: 'Sélection', material: 'Matière', scheme: 'Apparence', sound: 'Sons', soundStyle: 'Style de son' };
+  var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: DUO ? ['list', 'dock', 'duo'] : ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'], scheme: ['auto', 'day', 'night'], duoWall: DUO ? DUO.walls.map(function (w) { return w.id; }) : [], sound: ['normal', 'discret', 'coupes'], soundStyle: ['verre', 'goutte', 'zen', 'galet', 'bois', 'feutre', 'bronze', 'ardoise'] };
+  var LOOK_NAMES = { bg: 'Fond', layout: 'Disposition', apps: 'Applis', font: 'Police', controls: 'Commandes de l’accueil', focus: 'Sélection', material: 'Matière', scheme: 'Apparence', duoWall: 'Fond d’écran', sound: 'Sons', soundStyle: 'Style de son' };
   var VALUE_NAMES = { dark: 'Sombre', light: 'Clair', photo: 'Photo', list: 'Liste', dock: 'Barre', duo: 'Duo', type: 'Texte seul', glass: 'Verre', soft: 'Doux', frost: 'Givré', tint: 'Teinte claire', icons: 'Icônes', both: 'Icônes et texte', text: 'Texte', auto: 'Auto (suit le soleil)', day: 'Jour', night: 'Nuit', normal: 'Normal', discret: 'Discret', coupes: 'Coupés', verre: 'Verre', goutte: 'Goutte', zen: 'Zen', galet: 'Galet', bois: 'Bois', feutre: 'Feutre', bronze: 'Bronze', ardoise: 'Ardoise' };
   var STYLE_HINTS = { verre: 'clair et bref, le style de base', goutte: 'souple, comme de l’eau', zen: 'papier, pinceau et carillons', galet: 'mat et rond', bois: 'chaud, comme un marimba', feutre: 'très doux et feutré', bronze: 'grave et sonore', ardoise: 'le plus grave, sec' };
   var UTIL = { art: ['Mode Art', 'art'], inputs: ['Entrées', 'tv'], apps: ['Toutes les applis', 'apps'], samsung: ['Accueil Samsung', 'home'], arrange: ['Organiser', 'arrange'], settings: ['Réglages', 'settings'] };
@@ -94,7 +94,7 @@
     for (var i = 0; i < list.length; i++) if (list[i].toLowerCase() === v) return list[i];
     return fallback;
   }
-  function lookOf(c) { return { bg: c.bg, wall: c.wall, layout: c.layout, apps: c.apps, font: c.font, controls: c.controls, focus: c.focus, material: c.material, scheme: c.scheme, sound: c.sound, soundStyle: c.soundStyle }; }
+  function lookOf(c) { return { bg: c.bg, wall: c.wall, layout: c.layout, apps: c.apps, font: c.font, controls: c.controls, focus: c.focus, material: c.material, scheme: c.scheme, duoWall: c.duoWall, sound: c.sound, soundStyle: c.soundStyle }; }
   function materialApplies(c) { c = c || S.c; return c.layout !== 'duo' && c.bg === 'photo' && (c.layout === 'dock' || c.focus === 'glass'); }
 
   /* ---------- Helpers ---------- */
@@ -364,7 +364,7 @@
     // Duo is drawn on its own wallpaper, so it always counts as a photo background.
     var layout = pick(modern.layout, LOOK_VALUES.layout, legacyList ? 'list' : DUO ? 'duo' : 'dock');
     return {
-      bg: layout === 'duo' ? 'photo' : pick(modern.bg, LOOK_VALUES.bg, legacyList ? 'dark' : 'photo'), layout: layout, scheme: pick(modern.scheme, LOOK_VALUES.scheme, 'auto'),
+      bg: layout === 'duo' ? 'photo' : pick(modern.bg, LOOK_VALUES.bg, legacyList ? 'dark' : 'photo'), layout: layout, scheme: pick(modern.scheme, LOOK_VALUES.scheme, 'auto'), duoWall: DUO ? pick(modern.duoWall, LOOK_VALUES.duoWall, DUO.wall) : '',
       sound: pick(modern.sound, LOOK_VALUES.sound, 'discret'), soundStyle: pick(modern.soundStyle, LOOK_VALUES.soundStyle, 'verre'),
       apps: pick(modern.apps, LOOK_VALUES.apps, legacyList ? 'text' : 'both'), controls: pick(modern.controls, LOOK_VALUES.controls, 'both'),
       focus: pick(modern.focus, LOOK_VALUES.focus, legacyList ? 'type' : 'glass'), material: pick(modern.material, LOOK_VALUES.material, 'soft'),
@@ -568,7 +568,7 @@
   function addAppsRoute() { openEditor('home'); }
   function openSettings() { push({ id: 'settings', f: { id: S.settingsFocus } }); }
   function openAppearance(group) {
-    var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', scheme: 'scheme', sound: 'sound', soundStyle: 'soundStyle' }[group];
+    var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', scheme: 'scheme', duoWall: 'duoWall', sound: 'sound', soundStyle: 'soundStyle' }[group];
     var action = S.detailFocus[group] || (axis ? 'choice.' + axis + '.' + S.c[axis] : group === 'rotation' ? 'rotation.' + S.c.mode : 'samsung.home');
     push({ id: 'appearance', group: group, f: { action: action } });
   }
@@ -884,11 +884,11 @@
   function mode() { for (var i = 0; i < MODES.length; i++) if (MODES[i].id === S.c.mode) return MODES[i]; return MODES[0]; }
   function settingsRows() {
     var n = S.c.home.length;
-    if (S.c.layout === 'duo') return [{ id: 'scheme', label: 'Apparence', value: S.c.scheme === 'auto' ? 'Auto (soleil)' : VALUE_NAMES[S.c.scheme] },
+    if (S.c.layout === 'duo') return [{ id: 'scheme', label: 'Apparence', value: S.c.scheme === 'auto' ? 'Auto (soleil)' : VALUE_NAMES[S.c.scheme] }].concat(DUO.walls.length > 1 ? [{ id: 'duoWall', label: 'Fond d’écran', value: duoWallName(S.c.duoWall) }] : [], [
       { id: 'layout', label: 'Disposition', value: VALUE_NAMES[S.c.layout] },
       { id: 'sound', label: 'Sons', value: VALUE_NAMES[S.c.sound] },
       { id: 'editor', label: 'Applis de l’accueil', value: n + (n === 1 ? ' appli' : ' applis') },
-      { id: 'samsung', label: 'Samsung', value: '' }];
+      { id: 'samsung', label: 'Samsung', value: '' }]);
     return [{ id: 'background', label: 'Fond', value: S.c.bg === 'photo' ? wall(S.c.wall).name : VALUE_NAMES[S.c.bg] },
       { id: 'layout', label: 'Disposition', value: VALUE_NAMES[S.c.layout] },
       { id: 'typography', label: 'Typographie', value: FONTS[S.c.font].name },
@@ -914,7 +914,7 @@
     if (id === 'editor') openEditor('settings');
     else openAppearance(id);
   }
-  var DETAIL_NAMES = { background: 'Fond', layout: 'Disposition', typography: 'Typographie', focus: 'Sélection', rotation: 'Rotation', samsung: 'Samsung', inputs: 'Entrées', devices: 'Appareils', scheme: 'Apparence', sound: 'Sons', soundStyle: 'Style de son' };
+  var DETAIL_NAMES = { background: 'Fond', layout: 'Disposition', typography: 'Typographie', focus: 'Sélection', rotation: 'Rotation', samsung: 'Samsung', inputs: 'Entrées', devices: 'Appareils', scheme: 'Apparence', duoWall: 'Fond d’écran', sound: 'Sons', soundStyle: 'Style de son' };
   function choice(axis, value, disabled) {
     return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled,
       label: axis === 'font' ? FONTS[value].name : axis === 'mode' ? MODES.filter(function (m) { return m.id === value; })[0].name : value === 'both' ? 'Les deux' : VALUE_NAMES[value] };
@@ -945,6 +945,16 @@
       { id: 'rotation', title: 'Rotation', items: [{ action: 'background.rotation', label: mode().name, disabled: flat }], reason: flat ? 'Choisissez Photo pour utiliser le fond d’écran et la rotation.' : '' }
     ];
     if (t.group === 'scheme') return [{ id: 'scheme', title: '', items: options('scheme', LOOK_VALUES.scheme), reason: 'Auto suit le soleil de ' + WEATHER_PLACE.name + '.' }];
+    if (t.group === 'duoWall') {
+      // Rows of thumbnails are horizontal sections, so the gallery keeps the keys and the saving of every other choice.
+      var wallRows = [];
+      options('duoWall', LOOK_VALUES.duoWall).forEach(function (item, n) {
+        item.label = duoWallName(item.value);
+        if (!(n % DUO_WALLS.cols)) wallRows.push({ id: 'duoWall' + n, title: '', horizontal: true, items: [] });
+        wallRows[wallRows.length - 1].items.push(item);
+      });
+      return wallRows;
+    }
     if (t.group === 'layout') return S.c.layout === 'duo' ? [{ id: 'layout', title: '', items: options('layout', LOOK_VALUES.layout) }] : [
       { id: 'layout', title: 'Disposition', horizontal: true, items: options('layout', LOOK_VALUES.layout) },
       { id: 'apps', title: 'Affichage des applis', horizontal: true, items: options('apps', ['text', 'icons', 'both']) },
@@ -1056,7 +1066,7 @@
   V.appearance = {
     norm: function (t) {
       var rows = detailRows(t), exists = false, applied = null;
-      var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', rotation: 'mode', scheme: 'scheme', sound: 'sound', soundStyle: 'soundStyle' }[t.group];
+      var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', rotation: 'mode', scheme: 'scheme', duoWall: 'duoWall', sound: 'sound', soundStyle: 'soundStyle' }[t.group];
       rows.forEach(function (items) { items.forEach(function (item) {
         if (item.action === t.f.action) exists = true;
         if (item.active || axis && item.axis === axis && item.value === S.c[axis]) applied = item;
@@ -1307,7 +1317,7 @@
   var DUO_VOL = { x: 80, y: 80, track: 228, shown: 2200 }, DUO_ARRIVAL_MS = 2500, DUO_AUDIO_MS = 1200, DUO_FONT = '600 42px "Duo Geist"';
   var DUO_IDLE_MS = 20000, DUO_FADE_MS = 1200, DUO_FILES = 'assets/duo/', DUO_LENS = 164;
   var DUO_DAYS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'], DUO_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-  var duo = { built: false, rowKey: null, level: -1, scheme: 'day', focus: null, idle: false, idleTimer: 0, slots: [], apps: [], controls: [], text: null, tempEl: null, widths: {}, opening: null, card: null, errShown: null, pendingShown: false, toastTimer: 0, connected: null, bumped: false, volume: null, volumeTimer: 0 };
+  var duo = { built: false, wall: null, rowKey: null, level: -1, scheme: 'day', focus: null, idle: false, idleTimer: 0, slots: [], apps: [], controls: [], text: null, tempEl: null, widths: {}, opening: null, card: null, errShown: null, pendingShown: false, toastTimer: 0, connected: null, bumped: false, volume: null, volumeTimer: 0 };
 
   /* Altitude of the sun in degrees, from the usual low-precision formulas. */
   function sunAltitude(date, lat, lon) {
@@ -1325,7 +1335,27 @@
     if (S.c.scheme === 'night') return 1;
     return clamp((2 - sunAltitude(new Date(), WEATHER_PLACE.lat, WEATHER_PLACE.lon)) / 10, 0, 1);
   }
-  function duoFrost(name) { return DUO_FILES + 'frost-' + name + '.webp'; }
+  function duoWallName(id) { var found = DUO.walls.filter(function (w) { return w.id === id; })[0]; return found ? found.name : ''; }
+  /* Everything baked on a wallpaper lives in that wallpaper's folder. */
+  function duoDir(id) { return DUO_FILES + 'themes/' + (id || duo.wall || S.c.duoWall) + '/'; }
+  function duoFrost(name, id) { return duoDir(id) + 'frost-' + name + '.webp'; }
+  function duoWallFiles(id) {
+    var n = S.c.home.length, files = [duoFrost('day', id), duoFrost('night', id)];
+    ['ring', 'vol', 'apps' + n, 'ctrl' + n].forEach(function (piece) { files.push(duoDir(id) + 'glass/' + piece + '-day.webp', duoDir(id) + 'glass/' + piece + '-night.webp'); });
+    return files;
+  }
+  /* The new images are already loaded here, so the wallpaper, its glass and its frost change in one frame. */
+  function duoShowWall(id) {
+    function retarget(img) {
+      var from = img.getAttribute('src'), to = from && from.replace(/themes\/[^\/]+\//, 'themes/' + id + '/');
+      if (to && to !== from) img.setAttribute('src', to);
+    }
+    if (duo.wall === id) return;
+    duo.wall = id;
+    [duoRing, duoVol, duoCapApps, duoCapCtrl].forEach(function (root) { Array.prototype.forEach.call(root.querySelectorAll('img'), retarget); });
+    Array.prototype.forEach.call(duoPanels.querySelectorAll('.duo-card-field'), retarget);
+    if (duoPillField.getAttribute('src')) retarget(duoPillField);
+  }
   /* Dusk only changes the opacity of the night images, which sit above the day ones. */
   function syncNight(ms) {
     var level = nightLevel(), name = level >= .5 ? 'night' : 'day', list, i;
@@ -1353,14 +1383,14 @@
     if (duo.built) return;
     duo.built = true;
     box = DUO.glass.ring;
-    duoRing.innerHTML = duoPair(DUO_FILES + 'glass/ring-{s}.webp', 'left:' + box.x + 'px;top:' + box.y + 'px;width:' + box.w + 'px;height:' + box.h + 'px;');
+    duoRing.innerHTML = duoPair(duoDir() + 'glass/ring-{s}.webp', 'left:' + box.x + 'px;top:' + box.y + 'px;width:' + box.w + 'px;height:' + box.h + 'px;');
     duoRingInk.innerHTML = '<svg class="duo-arc" viewBox="0 0 104 104" aria-hidden="true" fill="none" stroke="#fff" stroke-linecap="round"><path d="M19.1 71A38 38 0 1 1 84.9 71" stroke-width="4.4"/><g fill="#fff" stroke="none"><circle cx="33" cy="84.9" r="2.8"/><circle cx="45.4" cy="89.4" r="2.8"/><circle cx="58.6" cy="89.4" r="2.8"/><circle cx="71" cy="84.9" r="2.8"/></g></svg>'
       + '<svg class="duo-weather" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round">' + SVG.cloud + '</svg><div class="duo-temp"></div>';
     duo.tempEl = duoRingInk.querySelector('.duo-temp');
     duoLens.innerHTML = duoPair(DUO_FILES + 'ui/lens-{s}.webp', 'width:' + DUO_LENS + 'px;height:' + DUO_LENS + 'px;');
     box = DUO.glass.vol;
     duoVol.style.width = box.w + 'px'; duoVol.style.height = box.h + 'px';
-    duoVol.innerHTML = duoPair(DUO_FILES + 'glass/vol-{s}.webp', 'position:absolute;left:0;top:0;width:' + box.w + 'px;height:' + box.h + 'px;')
+    duoVol.innerHTML = duoPair(duoDir() + 'glass/vol-{s}.webp', 'position:absolute;left:0;top:0;width:' + box.w + 'px;height:' + box.h + 'px;')
       + '<div class="duo-vol-ink" style="left:' + (DUO_VOL.x - box.x) + 'px;top:' + (DUO_VOL.y - box.y) + 'px"><div class="duo-vol-icon"></div><div class="duo-vol-track"><div class="duo-mover duo-vol-fill"></div></div><span class="duo-vol-value"></span></div>';
     duo.volIcon = duoVol.querySelector('.duo-vol-icon');
     duo.volFill = duoVol.querySelector('.duo-vol-fill');
@@ -1420,7 +1450,7 @@
   function duoCapsule(el, id) {
     var box = DUO.glass[id];
     el.style.left = box.x + 'px'; el.style.top = box.y + 'px'; el.style.width = box.w + 'px'; el.style.height = box.h + 'px';
-    el.innerHTML = duoPair(DUO_FILES + 'glass/' + id + '-{s}.webp', 'width:' + box.w + 'px;height:' + box.h + 'px;');
+    el.innerHTML = duoPair(duoDir() + 'glass/' + id + '-{s}.webp', 'width:' + box.w + 'px;height:' + box.h + 'px;');
   }
   /* A known service has a baked icon; another app keeps its own icon, or its initials. */
   function duoIconKey(a) {
@@ -1660,6 +1690,7 @@
   function duoFill(card, t) {
     if (t.id === 'apps') duoFillApps(card, t);
     else if (t.id === 'editor') duoFillEditor(card, t);
+    else if (t.id === 'appearance' && t.group === 'duoWall') duoFillWalls(card, t);
     else duoFillList(card, duoListModel(t));
   }
   function duoTopButton(z, i, action, label) {
@@ -1727,6 +1758,57 @@
     if (moved || card.index === null || card.index < 0) M.set(card.plate, target);
     else if (card.index !== index) M.to(card.plate, target, 'select');
     card.index = index;
+  }
+
+  /* The wallpaper gallery: thumbnails four across. OK applies one at once, and the screen around the card shows it. */
+  var DUO_WALLS = { cols: 4, w: 348, h: 266, left: 84, rest: .94 };
+  function duoFillWalls(card, t) {
+    var items = [], retry = null, was = card.index, animate = was !== null, index = -1, sig, row, scrollY;
+    detailRows(t).forEach(function (cells) { cells.forEach(function (item) { if (item.axis === 'duoWall') items.push(item); else retry = item; }); });
+    duoSizeCard(card, 1560, 900);
+    sig = 'walls|' + items.map(function (item) { return item.value; }).join();
+    if (card.sig !== sig) {
+      card.content.innerHTML = '<div class="duo-title">Fond d’écran</div><div class="duo-top-bar"></div><div class="duo-grid-window"><div class="duo-mover duo-grid">'
+        + items.map(function (item, k) {
+          var w = DUO.walls.filter(function (entry) { return entry.id === item.value; })[0];
+          return '<div class="duo-wall" role="button" data-z="detail" data-i="' + k + '" data-action="' + esc(item.action) + '" aria-label="' + esc(item.label) + '" style="left:' + (DUO_WALLS.left + (k % DUO_WALLS.cols) * DUO_WALLS.w) + 'px;top:' + (Math.floor(k / DUO_WALLS.cols) * DUO_WALLS.h) + 'px">'
+            + '<div class="duo-mover duo-wall-tile"><img alt="" src="' + duoDir(w.id) + (w.thumb ? 'thumb.webp' : 'frost-day.webp') + '"><span class="duo-wall-ring"></span><span class="duo-cell-badge">' + icon('check') + '</span></div>'
+            + '<span class="duo-wall-name">' + esc(item.label) + '</span></div>';
+        }).join('') + '</div></div>';
+      card.sig = sig;
+      card.topBar = card.content.querySelector('.duo-top-bar');
+      card.grid = card.content.querySelector('.duo-grid');
+      card.cells = card.content.querySelectorAll('.duo-wall');
+      card.tiles = card.content.querySelectorAll('.duo-wall-tile');
+      card.retryShown = null;
+      Array.prototype.forEach.call(card.tiles, function (tile) { M.set(tile, { s: DUO_WALLS.rest }); });
+      animate = false;
+      was = null;
+    }
+    // Only a wallpaper that failed to load or save asks for a second try.
+    if (card.retryShown !== !!retry) {
+      card.retryShown = !!retry;
+      card.topBar.innerHTML = retry ? duoTopButton('detail', 0, retry.action, retry.label) : '';
+    }
+    if (retry) card.topBar.firstChild.className = 'duo-top-button' + (t.f.action === retry.action ? ' is-focus' : '');
+    items.forEach(function (item, k) {
+      var cls = 'duo-wall' + (item.value === S.c.duoWall ? ' is-checked' : '');
+      if (item.action === t.f.action) { index = k; cls += ' is-focus'; }
+      if (card.cells[k].className !== cls) card.cells[k].className = cls;
+    });
+    if (index < 0) return;
+    row = Math.floor(index / DUO_WALLS.cols);
+    scrollY = -Math.max(0, row - 1) * DUO_WALLS.h;
+    if (animate && was === index) return;
+    card.index = index;
+    if (animate) {
+      if (card.tiles[was]) M.to(card.tiles[was], { s: DUO_WALLS.rest }, 'blur');
+      M.to(card.tiles[index], { s: 1 }, 'focus');
+      M.to(card.grid, { y: scrollY }, 'select');
+    } else {
+      M.set(card.tiles[index], { s: 1 });
+      M.set(card.grid, { y: scrollY });
+    }
   }
 
   /* All apps: a grid of five columns that follows the selection. */
@@ -1886,6 +1968,7 @@
     if (!card) return;
     if (t.id === 'apps') { if (f.zone === 'head') M.press(card.topButton); else if (card.tiles[f.i]) M.press(card.tiles[f.i], 1); }
     else if (t.id === 'editor') { if (f.zone === 'head') M.press(card.tops[f.h]); }
+    else if (t.group === 'duoWall') { if (card.tiles[card.index]) M.press(card.tiles[card.index], 1); }
     else if (t.id !== 'home' && card.index >= 0) M.press(card.plate);
   }
   /* A key that moved nothing has reached the end of what the card holds. */
@@ -1894,6 +1977,7 @@
     if (mark === null || !t.duoCard || top() !== t || k === 'ok' || k === 'back' || duoPanelMark(t) !== mark) return false;
     if (t.id === 'apps') return f.zone === 'grid';
     if (t.id === 'editor') return f.zone !== 'head' && (!t.lifted || vertical);
+    if (t.group === 'duoWall') return t.duoCard.index >= 0;
     return vertical && t.duoCard.index >= 0;
   }
   function duoPanelEdge(t, k) {
@@ -1902,7 +1986,8 @@
     else if (t.id === 'editor') {
       if (t.lifted) { duoNudge(card.lines[t.lifted.order[f.i]], 'y', sign * 8); duoNudge(card.plate, 'y', sign * 8); }
       else duoNudge(f.zone === 'home' && f.part === 'remove' ? card.dot : card.plate, axis, sign * 8);
-    } else duoNudge(card.plate, 'y', sign * 8);
+    } else if (t.group === 'duoWall') { if (card.tiles[card.index]) duoNudge(card.tiles[card.index], axis, sign * 8); }
+    else duoNudge(card.plate, 'y', sign * 8);
   }
 
   /* ---------- Duo sounds ---------- */
@@ -2489,11 +2574,14 @@
     else { im.onload = ready; im.onerror = function () { finish(false); }; }
   }
   function swapImg(k, im) { var old = IMG[k]; if (old === im) return; im.style.cssText = old.style.cssText; im.decoding = old.decoding; if (old.id) im.id = old.id; old.parentNode.replaceChild(im, old); IMG[k] = im; }
-  function bundleKey(look) { return look.layout === 'duo' ? 'duo' : look.wall + '|' + look.material; }
+  function bundleKey(look) { return look.layout === 'duo' ? 'duo:' + look.duoWall : look.wall + '|' + look.material; }
   function loadBundle(look, token, done) {
-    var imgs, keys, left, allOk = true;
-    if (look.layout === 'duo') imgs = { duoDay: makeImg('duo-fill', DUO_FILES + 'wall-day.webp'), duoNight: makeImg('duo-fill duo-night', DUO_FILES + 'wall-night.webp'), bg: makeImg('sheet-bg', duoFrost(nightLevel() >= .5 ? 'night' : 'day')) };
-    else {
+    var imgs, keys, waits, left, extras = [], allOk = true;
+    if (look.layout === 'duo') {
+      imgs = { duoDay: makeImg('duo-fill', duoDir(look.duoWall) + 'wall-day.webp'), duoNight: makeImg('duo-fill duo-night', duoDir(look.duoWall) + 'wall-night.webp'), bg: makeImg('sheet-bg', duoFrost(nightLevel() >= .5 ? 'night' : 'day', look.duoWall)) };
+      // On a change of wallpaper, its glass is fetched before anything moves. They are kept in the bundle so they stay decoded.
+      if (duo.built && look.duoWall !== duo.wall) extras = duoWallFiles(look.duoWall).map(function (src) { return makeImg('', src); });
+    } else {
       imgs = { photo: makeImg('photo', WP + look.wall + '.jpg'), bg: makeImg('sheet-bg', WP + look.wall + '-panel.jpg') };
       imgs.mat = makeImg('mat-img', matSrc(look.wall, look.material));
       imgs.field = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
@@ -2501,11 +2589,13 @@
       imgs.utility = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
       imgs.utilityAlt = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
     }
-    keys = Object.keys(imgs); left = keys.length;
-    keys.forEach(function (k) { whenReady(imgs[k], function (ok) {
+    keys = Object.keys(imgs);
+    waits = keys.map(function (k) { return imgs[k]; }).concat(extras);
+    left = waits.length;
+    waits.forEach(function (im) { whenReady(im, function (ok) {
       allOk = allOk && ok;
       if (--left || token !== wallToken) return;
-      done(allOk ? { key: bundleKey(look), imgs: imgs } : null);
+      done(allOk ? { key: bundleKey(look), imgs: imgs, extras: extras } : null);
     }); });
   }
   function installBundle(bundle, look, previewOnly) {
@@ -2513,6 +2603,7 @@
       Object.keys(bundle.imgs).forEach(function (k) { if (!previewOnly || k !== 'bg') swapImg(k, bundle.imgs[k]); });
       S.bundleKey = bundle.key;
     }
+    if (look.layout === 'duo' && look.duoWall) duoShowWall(look.duoWall);
     S.shown = { bg: look.bg, wall: look.wall, material: look.material, font: look.font };
     phFields.concat(utFields).forEach(function (el) { var p = el._placement; if (p) fieldTransform(el, p.x, p.y, p.width, p.height); });
     S.wallShown = look.wall; S.wallPending = null; S.wallError = null;
@@ -2572,7 +2663,7 @@
       if (document.hidden) { finish(loadedBundle); return; }
       window.requestAnimationFrame(function () { if (!failed && token === wallToken) finish(loadedBundle); });
     }
-    needs = target.bg === 'photo' && S.bundleKey !== bundleKey(target) && (!S.shown || S.shown.bg !== 'photo' || target.wall !== S.c.wall || materialApplies(target) || target.layout === 'duo' || S.bundleKey === 'duo');
+    needs = target.bg === 'photo' && S.bundleKey !== bundleKey(target) && (!S.shown || S.shown.bg !== 'photo' || target.wall !== S.c.wall || materialApplies(target) || target.layout === 'duo' || String(S.bundleKey).indexOf('duo:') === 0);
     needsFont = !fontMetrics[target.font]; imageDone = !needs; fontDone = !needsFont;
     if (!needs && !needsFont) { finish(null); return; }
     S.pending = { patch: changes, target: target, row: opts.row || (needsFont ? 'font' : S.appearanceFocus), transient: !!opts.transient, preview: false };
@@ -2772,7 +2863,7 @@
   var NAV = { left: 'left', right: 'right', up: 'up', down: 'down', ok: 'ok', enter: 'ok', back: 'back', escape: 'back' };
   QA.state = function () {
     var out = serialise(S.c), t = top(), item = t.id === 'appearance' ? detailLocation(t).item : null;
-    out.duo = S.c.layout === 'duo' ? { level: duo.level, scheme: duo.scheme, idle: duo.idle, clock: duo.text } : null;
+    out.duo = S.c.layout === 'duo' ? { level: duo.level, scheme: duo.scheme, idle: duo.idle, clock: duo.text, wall: duo.wall } : null;
     out.committed = S.c; out.shown = S.shown; out.pending = S.pending; out.view = t.id; out.selected = S.sel;
     out.focusAction = focusedAction(); out.writes = S.writes; out.failedWrites = S.failed; out.error = S.err;
     out.catalog = { loading: catalog.loading, loaded: catalog.loaded, error: catalog.error, ids: ALPHA.slice(), inputs: INPUT_IDS.slice() };

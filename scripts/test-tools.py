@@ -159,11 +159,12 @@ class ToolTests(unittest.TestCase):
         write_widget_archive(personal, root=self.root, include_private=True)
         write_widget_archive(public, root=self.root, include_private=False)
         with zipfile.ZipFile(personal) as archive:
-            self.assertIn('assets/duo/glass/ring-day.webp', archive.namelist())
-            self.assertNotIn('assets/duo/notes.txt', archive.namelist())
+            self.assertIn('assets/duo/themes/perso/glass/ring-day.webp', archive.namelist())
+            self.assertIn('assets/duo/icons/netflix.webp', archive.namelist())
+            self.assertFalse(any(name.endswith('notes.txt') for name in archive.namelist()))
             catalogue = archive.read('assets/duo-catalog.js').decode()
             self.assertEqual(archive.namelist().count('assets/duo-catalog.js'), 1)
-            self.assertEqual(json.loads(catalogue[len('window.CleanFrameDuo = '):].rstrip(';\n')), {'glass': {'ring': {'x': 1, 'y': 2, 'w': 3, 'h': 4}}, 'icons': ['netflix']})
+            self.assertEqual(json.loads(catalogue[len('window.CleanFrameDuo = '):].rstrip(';\n')), {'glass': {'ring': {'x': 1, 'y': 2, 'w': 3, 'h': 4}}, 'icons': ['netflix'], 'walls': [{'id': 'perso', 'name': 'Dunes', 'thumb': False}], 'wall': 'perso'})
         with zipfile.ZipFile(public) as archive:
             self.assertFalse(any(name.startswith('assets/duo/') for name in archive.namelist()))
             self.assertEqual(archive.read('assets/duo-catalog.js'), b'window.CleanFrameDuo = null;\n')
@@ -172,6 +173,41 @@ class ToolTests(unittest.TestCase):
         (self.root / 'app/assets/duo/wall-day.webp').write_bytes(b'synthetic image')
         with self.assertRaises(ValueError):
             write_widget_archive(public, root=self.root, include_private=False)
+
+    def test_private_wallpapers_never_reach_a_public_build(self):
+        for folder, image, name in [('duo-pack/themes/amber', b'public image', 'Ambre'), ('.local/duo', b'private image', 'Dunes'), ('.local/duo-themes/mine', b'my image', 'Mine')]:
+            (self.root / folder / 'glass').mkdir(parents=True)
+            (self.root / folder / 'glass/manifest.json').write_text('{"ring": {"x": 1, "y": 2, "w": 3, "h": 4}}')
+            (self.root / folder / 'wall-day.webp').write_bytes(image)
+            (self.root / folder / 'theme.json').write_text(json.dumps({'name': name}))
+        (self.root / 'app/assets').mkdir()
+        (self.root / 'app/assets/duo-catalog.js').write_text('window.CleanFrameDuo = null;\n')
+        personal, public = self.root / 'personal.wgt', self.root / 'public.wgt'
+        write_widget_archive(personal, root=self.root, include_private=True)
+        write_widget_archive(public, root=self.root, include_private=False)
+        def catalogue(archive):
+            return json.loads(archive.read('assets/duo-catalog.js').decode()[len('window.CleanFrameDuo = '):].rstrip(';\n'))
+        with zipfile.ZipFile(personal) as archive:
+            self.assertEqual(archive.read('assets/duo/themes/perso/wall-day.webp'), b'private image')
+            self.assertEqual(archive.read('assets/duo/themes/mine/wall-day.webp'), b'my image')
+            self.assertEqual([wall['id'] for wall in catalogue(archive)['walls']], ['perso', 'mine', 'amber'])
+            self.assertEqual(catalogue(archive)['wall'], 'perso')
+        with zipfile.ZipFile(public) as archive:
+            self.assertEqual(archive.read('assets/duo/themes/amber/wall-day.webp'), b'public image')
+            self.assertFalse(any('/perso/' in name or '/mine/' in name for name in archive.namelist()))
+            self.assertEqual([wall['id'] for wall in catalogue(archive)['walls']], ['amber'])
+            self.assertEqual(catalogue(archive)['wall'], 'amber')
+
+    def test_a_wallpaper_with_other_glass_geometry_is_left_out(self):
+        for folder, manifest in [('duo-pack/themes/amber', '{"ring": {"x": 1}}'), ('duo-pack/themes/other', '{"ring": {"x": 2}}')]:
+            (self.root / folder / 'glass').mkdir(parents=True)
+            (self.root / folder / 'glass/manifest.json').write_text(manifest)
+        (self.root / 'app/assets').mkdir()
+        output = self.root / 'public.wgt'
+        write_widget_archive(output, root=self.root, include_private=False)
+        with zipfile.ZipFile(output) as archive:
+            self.assertIn('"id":"amber"', archive.read('assets/duo-catalog.js').decode())
+            self.assertNotIn('"id":"other"', archive.read('assets/duo-catalog.js').decode())
 
     def test_unsigned_build_needs_no_sdk_or_certificate(self):
         self.config(profile='Synthetic', sdk_path='missing-sdk', package_id='AbCdE12345', app_id='AbCdE12345.Frame')
